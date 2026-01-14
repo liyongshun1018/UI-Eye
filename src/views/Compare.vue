@@ -111,7 +111,7 @@
           <h2 class="section-title">4. 选择 AI 分析模型（可选）</h2>
           <div class="model-selector">
             <label
-              v-for="model in aiModels"
+              v-for="model in availableAiModels"
               :key="model.value"
               class="model-option"
               :class="{ active: config.aiModel === model.value }"
@@ -208,7 +208,7 @@
           >
             <span v-if="!isSubmitting">开始对比</span>
             <span v-else class="loading">
-              <span class="spin">⚙️</span> 处理中...
+              <span class="spin">⚙️⚙️</span> 处理中...
             </span>
           </button>
         </div>
@@ -238,7 +238,7 @@ const modes = [
 ]
 
 // AI 模型
-const aiModels = Object.values(AI_MODELS)
+const availableAiModels = Object.values(AI_MODELS)
 
 // 视口预设
 const viewportPresets = VIEWPORT_PRESETS

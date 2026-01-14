@@ -23,7 +23,7 @@ export interface CompareConfig {
 
 // CSS 修复建议接口
 export interface CSSFix {
-    priority: 'high' | 'medium' | 'low'
+    priority: 'critical' | 'high' | 'medium' | 'low'
     type: 'color' | 'font' | 'spacing' | 'layout'
     description: string
     selector: string
