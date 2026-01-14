@@ -37,15 +37,13 @@
   flex-direction: column;
 }
 
-/* 导航栏 */
+/* 导航栏 - 添加渐变背景 */
 .navbar {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
 }
 
 .navbar-container {
@@ -65,12 +63,13 @@
   text-decoration: none;
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
+  color: white;
   transition: all var(--transition-base);
 }
 
 .navbar-brand:hover {
   transform: scale(1.05);
+  opacity: 0.9;
 }
 
 .brand-icon {
@@ -78,10 +77,8 @@
 }
 
 .brand-text {
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .navbar-menu {
@@ -99,7 +96,7 @@
 .nav-item {
   position: relative;
   text-decoration: none;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.9);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -107,11 +104,13 @@
 }
 
 .nav-item:hover {
-  color: var(--accent-primary);
+  color: white;
+  transform: translateY(-1px);
 }
 
 .nav-item.router-link-active {
-  color: var(--accent-primary);
+  color: white;
+  font-weight: var(--font-weight-semibold);
 }
 
 .nav-item.router-link-active::after {
@@ -120,9 +119,10 @@
   bottom: -4px;
   left: 0;
   right: 0;
-  height: 2px;
-  background: var(--accent-gradient);
+  height: 3px;
+  background: white;
   border-radius: var(--radius-full);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* 主内容区域 */

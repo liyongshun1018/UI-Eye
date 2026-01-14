@@ -22,32 +22,45 @@ body {
 
 /* ===== CSS Custom Properties (Design Tokens) ===== */
 :root {
-  /* Colors - Fresh Blue Theme */
-  --bg-primary: #f0f9ff;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #e0f2fe;
-  --bg-glass: rgba(255, 255, 255, 0.8);
-  --bg-glass-hover: rgba(255, 255, 255, 0.95);
+  /* Colors - Optimized for Better Contrast */
+  /* 背景颜色 */
+  --bg-primary: #ffffff;
+  /* 纯白 - 主背景 */
+  --bg-secondary: #f8fafc;
+  /* 浅灰 - 次要背景 */
+  --bg-tertiary: #f0f9ff;
+  /* 浅蓝 - 强调背景 */
+  --bg-glass: rgba(255, 255, 255, 0.95);
+  --bg-glass-hover: rgba(255, 255, 255, 0.98);
 
-  --text-primary: #0c4a6e;
-  --text-secondary: #0369a1;
-  --text-tertiary: #7dd3fc;
+  /* 文本颜色 - 改进对比度 */
+  --text-primary: #0f172a;
+  /* 深灰黑 - 主要文本 */
+  --text-secondary: #475569;
+  /* 中灰 - 次要文本 */
+  --text-tertiary: #94a3b8;
+  /* 浅灰 - 辅助文本 */
 
+  /* 品牌色 - 保持蓝色系 */
   --accent-primary: #0ea5e9;
   --accent-secondary: #06b6d4;
   --accent-gradient: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
 
+  /* 状态颜色 */
   --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
+  --info: #3b82f6;
 
-  --border-color: rgba(14, 165, 233, 0.2);
-  --border-color-hover: rgba(14, 165, 233, 0.4);
+  /* 边框颜色 */
+  --border-color: #e2e8f0;
+  --border-color-hover: #cbd5e1;
 
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(14, 165, 233, 0.1);
-  --shadow-md: 0 4px 16px rgba(14, 165, 233, 0.15);
-  --shadow-lg: 0 8px 32px rgba(14, 165, 233, 0.2);
+  /* Shadows - 更柔和的阴影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
   --shadow-glow: 0 0 20px rgba(14, 165, 233, 0.3);
 
   /* Spacing */
@@ -60,8 +73,9 @@ body {
 
   /* Border Radius */
   --radius-sm: 0.5rem;
-  --radius-md: 1rem;
-  --radius-lg: 1.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
   --radius-full: 9999px;
 
   /* Typography */
@@ -79,21 +93,25 @@ body {
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
+  /* Font Families */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
   /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 350ms ease;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ===== Utility Classes ===== */
 
-/* Glass morphism */
+/* Glass morphism - 优化版本 */
 .glass {
   background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .glass-hover {
@@ -102,9 +120,8 @@ body {
 
 .glass-hover:hover {
   background: var(--bg-glass-hover);
-  border-color: var(--border-color-hover);
+  box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
 }
 
 /* Gradient text */
@@ -115,7 +132,7 @@ body {
   background-clip: text;
 }
 
-/* Buttons */
+/* Buttons - 优化的按钮系统 */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -123,34 +140,96 @@ body {
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
   font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-semibold);
   border-radius: var(--radius-md);
   border: none;
   cursor: pointer;
   transition: all var(--transition-base);
   text-decoration: none;
+  line-height: 1;
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 主按钮 - 实心 + 渐变 + 阴影 */
 .btn-primary {
   background: var(--accent-gradient);
   color: white;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
 .btn-primary:hover {
-  box-shadow: var(--shadow-glow);
   transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
 }
 
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+/* 次要按钮 - 边框样式 */
 .btn-secondary {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 2px solid var(--border-color);
+  background: transparent;
+  color: var(--accent-primary);
+  border: 2px solid var(--accent-primary);
+  box-shadow: none;
 }
 
 .btn-secondary:hover {
   background: var(--bg-tertiary);
-  border-color: var(--border-color-hover);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* Ghost 按钮 */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.btn-ghost:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btn-ghost:active {
+  transform: scale(0.98);
+}
+
+/* 按钮尺寸 */
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: var(--font-size-sm);
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: var(--font-size-lg);
+}
+
+.btn-xl {
+  padding: 1.25rem 2.5rem;
+  font-size: var(--font-size-xl);
+}
+
+/* 按钮图标 */
+.btn .icon {
+  font-size: 1.2em;
+  transition: transform var(--transition-base);
+}
+
+.btn:hover .icon {
+  transform: translateX(4px);
 }
 
 /* Cards */

@@ -78,15 +78,31 @@
               v-model="config.designSource"
               type="url"
               class="form-input"
-              placeholder="https://lanhuapp.com/url/xxx.png 或其他图片 URL"
+              placeholder="https://example.com/design.png"
               required
             />
-            <p class="input-hint">
-              💡 输入图片 URL（支持蓝湖导出的图片地址或其他图床）<br/>
-              <span style="font-size: 0.85em; color: var(--text-tertiary);">
-                蓝湖操作：打开设计稿 → 右键 → 复制图片地址 → 粘贴到此处
-              </span>
-            </p>
+            <div class="input-hint-box">
+              <div class="hint-title">
+                <span class="hint-icon">💡</span>
+                <span>如何获取蓝湖图片地址？</span>
+              </div>
+              <ol class="hint-steps">
+                <li>在蓝湖中打开设计稿页面</li>
+                <li>在设计稿图片上<strong>右键点击</strong></li>
+                <li>选择"<strong>复制图片地址</strong>"或"<strong>在新标签页中打开图片</strong>"</li>
+                <li>将复制的图片 URL 粘贴到上方输入框</li>
+              </ol>
+              <div class="hint-note">
+                <span class="note-icon">⚠️</span>
+                <span>注意：必须是以 <code>.png</code> 或 <code>.jpg</code> 结尾的图片地址，不是网页链接</span>
+              </div>
+              <div class="hint-example">
+                <div class="example-label">✅ 正确示例：</div>
+                <code class="example-url good">https://lanhuapp.com/images/xxx.png</code>
+                <div class="example-label">❌ 错误示例：</div>
+                <code class="example-url bad">https://lanhu.aibank.link/web/#/item/...</code>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -713,5 +729,111 @@ const handleSubmit = async () => {
   .custom-viewport {
     flex-direction: column;
   }
+}
+
+/* 蓝湖操作指南样式 */
+.input-hint-box {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.hint-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.hint-icon {
+  font-size: 1.25rem;
+}
+
+.hint-steps {
+  margin: var(--spacing-sm) 0;
+  padding-left: var(--spacing-lg);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.8;
+}
+
+.hint-steps li {
+  margin-bottom: 0.5rem;
+}
+
+.hint-steps strong {
+  color: var(--accent-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.hint-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+  margin: var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.note-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.hint-note code {
+  padding: 0.125rem 0.375rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--accent-primary);
+}
+
+.hint-example {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: white;
+  border-radius: var(--radius-sm);
+}
+
+.example-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.example-label:first-child {
+  margin-top: 0;
+}
+
+.example-url {
+  display: block;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  word-break: break-all;
+}
+
+.example-url.good {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--success);
+}
+
+.example-url.bad {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--error);
 }
 </style>

@@ -650,7 +650,7 @@ const locateRegion = () => {
 <style scoped>
 .report-page {
   min-height: 100vh;
-  padding: var(--spacing-2xl) 0;
+  padding: var(--spacing-lg) 0;
 }
 
 /* 加载和错误状态 */
@@ -724,16 +724,16 @@ const locateRegion = () => {
   border: 1px solid var(--border-color);
 }
 
-/* 并排对比容器 */
+/* 并排对比容器 - 紧凑版 */
 .side-by-side-container {
   position: relative;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
   background: #f8fafc;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
   border-radius: var(--radius-md);
-  min-height: 600px;
+  min-height: 400px;
   grid-column: 1 / -1;
 }
 
@@ -947,17 +947,17 @@ const locateRegion = () => {
   font-size: 4rem;
 }
 
-/* 报告头部 */
+/* 报告头部 - 紧凑版 */
 .report-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-xl);
-  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .report-title {
-  font-size: var(--font-size-3xl);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   margin-bottom: var(--spacing-xs);
 }
@@ -969,11 +969,11 @@ const locateRegion = () => {
   gap: var(--spacing-xs);
 }
 
-/* 分数圆环 */
+/* 分数圆环 - 紧凑版 */
 .score-circle {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 100px;
+  height: 100px;
 }
 
 .score-circle svg {
@@ -1016,16 +1016,16 @@ const locateRegion = () => {
   color: var(--text-secondary);
 }
 
-/* 图片对比 */
+/* 图片对比 - 紧凑版 */
 .image-comparison {
-  padding: var(--spacing-xl);
-  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .section-title {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .comparison-tabs {
@@ -1055,9 +1055,9 @@ const locateRegion = () => {
   border-bottom-color: var(--accent-primary);
 }
 
-/* 修复建议 */
+/* 修复建议 - 紧凑版 */
 .fixes-section {
-  padding: var(--spacing-xl);
+  padding: var(--spacing-md);
 }
 
 .fixes-count {
@@ -1083,7 +1083,7 @@ const locateRegion = () => {
 }
 
 .fix-item {
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -1292,9 +1292,7 @@ const locateRegion = () => {
     border: 2px solid var(--border-color);
     overflow: auto;
     max-height: 700px;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
+    display: inline-block;
 }
 
 .base-layer {
@@ -1306,8 +1304,7 @@ const locateRegion = () => {
 .overlay-layer {
     position: absolute;
     top: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     max-width: 100%;
     height: auto;
     transition: opacity 0.3s ease;
