@@ -1,0 +1,877 @@
+<template>
+  <div class="compare-page">
+    <div class="page-header">
+      <h1 class="page-title">开始对比</h1>
+      <p class="page-subtitle">整合 AI 驱动与像素级引擎的专业自动化视检</p>
+    </div>
+
+    <div class="compare-container">
+      <!-- 左侧：配置表单 -->
+      <div class="config-panel">
+        <div class="config-content">
+        <!-- 步骤 1: 选择对比模式 -->
+        <div class="form-section">
+          <h2 class="section-title">1. 选择对比模式</h2>
+          <div class="mode-selector">
+            <div
+              v-for="mode in modes"
+              :key="mode.value"
+              class="mode-card"
+              :class="{ active: config.mode === mode.value }"
+              @click="config.mode = mode.value"
+            >
+              <div class="mode-icon">{{ mode.icon }}</div>
+              <div class="mode-name">{{ mode.name }}</div>
+              <div class="mode-desc">{{ mode.description }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 步骤 2: 输入 H5 页面 URL -->
+        <div class="form-section">
+          <h2 class="section-title">2. 输入 H5 页面地址</h2>
+          <input
+            v-model="config.url"
+            type="url"
+            class="form-input"
+            placeholder="https://example.com/page.html"
+            required
+          />
+        </div>
+
+        <!-- 步骤 3: 设计稿来源 -->
+        <div class="form-section">
+          <h2 class="section-title">3. 设计稿来源</h2>
+          
+          <!-- 模式一：效果图上传 -->
+          <div v-if="config.mode === 'upload'" class="upload-area">
+            <div
+              class="dropzone"
+              :class="{ 'drag-over': isDragging }"
+              @dragover.prevent="isDragging = true"
+              @dragleave.prevent="isDragging = false"
+              @drop.prevent="handleDrop"
+              @click="triggerFileInput"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                style="display: none"
+                @change="handleFileSelect"
+              />
+              <div v-if="!designFile" class="dropzone-placeholder">
+                <div class="upload-icon">📤</div>
+                <p>拖拽设计稿到此处，或点击选择文件</p>
+                <p class="upload-hint">支持 PNG、JPG 格式</p>
+              </div>
+              <div v-else class="file-preview">
+                <img :src="designPreview" alt="设计稿预览" />
+                <button class="btn btn-secondary btn-sm" @click.stop="clearFile">
+                  重新选择
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模式二：图片 URL（蓝湖） -->
+          <div v-else class="lanhu-input">
+            <input
+              v-model="config.designSource"
+              type="url"
+              class="form-input"
+              placeholder="https://lanhuapp.com/url/xxx.png 或其他图片 URL"
+              required
+            />
+            <p class="input-hint">
+              💡 输入图片 URL（支持蓝湖导出的图片地址或其他图床）<br/>
+              <span style="font-size: 0.85em; color: var(--text-tertiary);">
+                蓝湖操作：打开设计稿 → 右键 → 复制图片地址 → 粘贴到此处
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <!-- 步骤 4: 选择 AI 模型 -->
+        <div class="form-section">
+          <h2 class="section-title">4. 选择 AI 分析模型（可选）</h2>
+          <div class="model-selector">
+            <label
+              v-for="model in aiModels"
+              :key="model.value"
+              class="model-option"
+              :class="{ active: config.aiModel === model.value }"
+            >
+              <input
+                v-model="config.aiModel"
+                type="radio"
+                :value="model.value"
+                name="aiModel"
+              />
+              <span class="model-name">{{ model.name }}</span>
+              <span class="model-badge">{{ model.environment }}</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 步骤 5: 视口配置 -->
+        <div class="form-section">
+          <h2 class="section-title">5. 视口尺寸</h2>
+          <div class="viewport-selector">
+            <select v-model="selectedPreset" class="form-select" @change="handlePresetChange">
+              <option v-for="preset in viewportPresets" :key="preset.name" :value="preset.name">
+                {{ preset.name }}
+                <template v-if="preset.width > 0">
+                  ({{ preset.width }} x {{ preset.height }})
+                </template>
+              </option>
+            </select>
+            
+            <div v-if="selectedPreset === '自定义'" class="custom-viewport">
+              <input
+                v-model.number="config.viewport.width"
+                type="number"
+                class="form-input"
+                placeholder="宽度"
+                min="320"
+              />
+              <span class="separator">×</span>
+              <input
+                v-model.number="config.viewport.height"
+                type="number"
+                class="form-input"
+                placeholder="高度"
+                min="480"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 步骤 6: 对比引擎选择 -->
+        <div class="form-section">
+          <h2 class="section-title">6. 对比引擎（可选）</h2>
+          <div class="engine-selector">
+            <label
+              v-for="engine in engines"
+              :key="engine.value"
+              class="engine-option"
+              :class="{ active: config.engine === engine.value }"
+            >
+              <input
+                v-model="config.engine"
+                type="radio"
+                :value="engine.value"
+                name="engine"
+              />
+              <div class="engine-content">
+                <span class="engine-name">{{ engine.name }}</span>
+                <span class="engine-badge" :class="`badge-${engine.value}`">{{ engine.badge }}</span>
+                <p class="engine-desc">{{ engine.description }}</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- Resemble 高级选项 -->
+          <div v-if="config.engine === 'resemble'" class="advanced-options">
+            <h3 class="options-title">高级选项</h3>
+            <label class="checkbox-option">
+              <input
+                v-model="config.ignoreAntialiasing"
+                type="checkbox"
+              />
+              <span>忽略抗锯齿差异</span>
+              <span class="option-hint">（推荐）减少字体渲染等导致的误报</span>
+            </label>
+          </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：上传预览区域 -->
+      <div class="preview-panel">
+        <div class="preview-header">
+          <span class="step-number">3</span>
+          <span class="step-title">设计稿上传</span>
+        </div>
+        
+        <div class="preview-content">
+          <!-- 模式一：效果图上传 -->
+          <div v-if="config.mode === 'upload'" class="upload-area">
+            <div
+              class="dropzone-large"
+              :class="{ 'drag-over': isDragging }"
+              @dragover.prevent="isDragging = true"
+              @dragleave.prevent="isDragging = false"
+              @drop.prevent="handleDrop"
+              @click="triggerFileInput"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                style="display: none"
+                @change="handleFileSelect"
+              />
+              <div v-if="!designFile" class="dropzone-placeholder">
+                <div class="upload-icon-large">📤</div>
+                <p class="upload-title">拖拽设计稿到此处</p>
+                <p class="upload-hint">支持 PNG、JPG、PDF（最大 20MB）</p>
+                <button class="btn btn-secondary" @click.stop="triggerFileInput">
+                  浏览本地文件
+                </button>
+              </div>
+              <div v-else class="file-preview-large">
+                <img :src="designPreview" alt="设计稿预览" />
+                <button class="btn btn-secondary btn-sm" @click.stop="clearFile">
+                  重新选择
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模式二：图片 URL（蓝湖） -->
+          <div v-else class="url-input-area">
+            <div class="url-input-placeholder">
+              <div class="upload-icon-large">📤</div>
+              <p class="upload-title">输入图片 URL</p>
+              <p class="upload-hint">支持蓝湖导出的图片地址或其他图床</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部：高级配置和提交按钮 -->
+    <div class="bottom-bar">
+      <div class="bottom-content">
+        <!-- 左侧：高级配置 -->
+        <div class="advanced-config">
+          <button class="config-toggle" @click="showAdvanced = !showAdvanced">
+            <span class="icon">⚙️</span>
+            <span>高级设置</span>
+          </button>
+          
+          <!-- AI 模型选择 -->
+          <div class="config-group">
+            <label class="config-label">AI 模型</label>
+            <select v-model="config.aiModel" class="config-select">
+              <option v-for="model in aiModels" :key="model.value" :value="model.value">
+                {{ model.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- 对比引擎 -->
+          <div class="config-group">
+            <label class="config-label">对比算法</label>
+            <select v-model="config.engine" class="config-select">
+              <option value="pixelmatch">Pixelmatch</option>
+              <option value="resemble">Resemble</option>
+            </select>
+          </div>
+
+          <!-- 引擎 -->
+          <div class="config-group">
+            <label class="config-label">引擎</label>
+            <div class="engine-tags">
+              <span class="tag">GPT-4o</span>
+              <span class="tag">引擎</span>
+              <span class="tag active">Pixelmatch</span>
+              <span class="tag">Resemble</span>
+            </div>
+          </div>
+
+          <!-- 容差滑块 -->
+          <div class="config-group">
+            <label class="config-label">容差</label>
+            <input type="range" min="0" max="100" value="50" class="config-slider" />
+          </div>
+        </div>
+
+        <!-- 右侧：操作按钮 -->
+        <div class="bottom-actions">
+          <button class="btn btn-secondary">重置</button>
+          <button
+            class="btn btn-primary btn-large"
+            :disabled="!canSubmit || isSubmitting"
+            @click="handleSubmit"
+          >
+            <span v-if="!isSubmitting">开始对比 🚀</span>
+            <span v-else class="loading">
+              <span class="spin">⚙️</span> 处理中...
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@/config/constants'
+import { uploadDesign, fetchLanhuDesign, startCompare } from '@/services/compare'
+import type { CompareConfig } from '@/types'
+
+const router = useRouter()
+
+// 对比模式
+const modes = [
+  { ...COMPARE_MODES.UPLOAD, icon: '📤' },
+  { 
+    value: 'lanhu',
+    name: '图片 URL',
+    description: '输入远程图片地址（支持蓝湖）',
+    icon: '🔗'
+  }
+]
+
+// AI 模型
+const aiModels = Object.values(AI_MODELS)
+
+// 视口预设
+const viewportPresets = VIEWPORT_PRESETS
+
+// 表单配置
+const config = reactive<CompareConfig>({
+  url: '',
+  mode: 'upload',
+  designSource: '',
+  aiModel: 'siliconflow',
+  engine: 'pixelmatch', // 默认引擎
+  ignoreAntialiasing: true, // 默认忽略抗锯齿
+  viewport: {
+    width: 375,
+    height: 667
+  }
+})
+
+// 对比引擎选项
+const engines = [
+  {
+    value: 'pixelmatch',
+    name: 'Pixelmatch',
+    badge: '快速',
+    description: '基于像素级对比，速度快，适合快速检查'
+  },
+  {
+    value: 'resemble',
+    name: 'Resemble.js',
+    badge: '高质量',
+    description: '智能对比引擎，自动忽略抗锯齿，减少误报'
+  }
+]
+
+// 文件上传相关
+const fileInput = ref<HTMLInputElement>()
+const designFile = ref<File>()
+const designPreview = ref<string>('')
+const isDragging = ref(false)
+const isSubmitting = ref(false)
+const selectedPreset = ref('iPhone SE')
+
+// 表单验证
+const canSubmit = computed(() => {
+  if (!config.url) return false
+  if (config.mode === 'upload' && !designFile.value) return false
+  if (config.mode === 'lanhu' && !config.designSource) return false
+  return true
+})
+
+// 触发文件选择
+const triggerFileInput = () => {
+  fileInput.value?.click()
+}
+
+// 处理文件选择
+const handleFileSelect = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    setDesignFile(file)
+  }
+}
+
+// 处理拖拽上传
+const handleDrop = (e: DragEvent) => {
+  isDragging.value = false
+  const file = e.dataTransfer?.files[0]
+  if (file && file.type.startsWith('image/')) {
+    setDesignFile(file)
+  }
+}
+
+// 设置设计稿文件
+const setDesignFile = (file: File) => {
+  designFile.value = file
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    designPreview.value = e.target?.result as string
+  }
+  reader.readAsDataURL(file)
+}
+
+// 清除文件
+const clearFile = () => {
+  designFile.value = undefined
+  designPreview.value = ''
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+// 处理视口预设变化
+const handlePresetChange = () => {
+  const preset = viewportPresets.find(p => p.name === selectedPreset.value)
+  if (preset && preset.width > 0) {
+    config.viewport.width = preset.width
+    config.viewport.height = preset.height
+  }
+}
+
+// 提交表单
+const handleSubmit = async () => {
+  if (!canSubmit.value || isSubmitting.value) return
+
+  isSubmitting.value = true
+
+  try {
+    // 1. 上传设计稿或获取蓝湖设计稿
+    if (config.mode === 'upload' && designFile.value) {
+      const uploadRes = await uploadDesign(designFile.value)
+      if (!uploadRes.success || !uploadRes.data) {
+        throw new Error(uploadRes.message || '设计稿上传失败，请重试')
+      }
+      config.designSource = uploadRes.data.url
+    } else if (config.mode === 'lanhu') {
+      const lanhuRes = await fetchLanhuDesign(config.designSource)
+      if (!lanhuRes.success || !lanhuRes.data) {
+        throw new Error(lanhuRes.message || '获取蓝湖设计稿失败，请检查链接是否正确')
+      }
+      config.designSource = lanhuRes.data.imageUrl
+    }
+
+    // 2. 开始对比
+    const compareRes = await startCompare(config)
+    if (!compareRes.success || !compareRes.data) {
+      throw new Error(compareRes.message || '启动对比任务失败，请重试')
+    }
+    
+    // 跳转到报告页面
+    router.push(`/report/${compareRes.data.reportId}`)
+  } catch (error: any) {
+    console.error('对比失败:', error)
+    
+    // 显示详细错误信息
+    const errorMessage = error.message || '对比失败，请重试'
+    alert(`❌ ${errorMessage}\n\n建议：\n1. 检查网络连接\n2. 确认页面 URL 可访问\n3. 验证设计稿格式正确`)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+</script>
+
+<style scoped>
+.compare-page {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+/* 页面头部 */
+.page-header {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.page-title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+/* 主容器：左右分栏 */
+.compare-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* 左侧：配置面板 */
+.config-panel {
+  background: white;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+}
+
+.config-content {
+  padding: var(--spacing-lg);
+}
+
+/* 表单区域 */
+.form-section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-md);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.section-title::before {
+  content: attr(data-step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 50%;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+/* 模式选择器 - 标签页样式 */
+.mode-selector {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.mode-card {
+  flex: 1;
+  padding: var(--spacing-sm);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border: none;
+  border-right: 1px solid var(--border-color);
+  background: white;
+}
+
+.mode-card:last-child {
+  border-right: none;
+}
+
+.mode-card.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.mode-card:hover:not(.active) {
+  background: var(--bg-tertiary);
+}
+
+.mode-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.mode-name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+}
+
+.mode-desc {
+  display: none;
+}
+
+/* 表单输入 */
+.form-input,
+.form-select {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-base);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  transition: all var(--transition-base);
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* 右侧：预览面板 */
+.preview-panel {
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 50%;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.step-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.preview-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+}
+
+/* 大型上传区域 */
+.dropzone-large {
+  width: 100%;
+  max-width: 500px;
+  min-height: 300px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.dropzone-large:hover,
+.dropzone-large.drag-over {
+  border-color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.dropzone-placeholder,
+.url-input-placeholder {
+  text-align: center;
+  padding: var(--spacing-xl);
+}
+
+.upload-icon-large {
+  font-size: 3rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.upload-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-primary);
+}
+
+.upload-hint {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.file-preview-large {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+}
+
+.file-preview-large img {
+  max-width: 100%;
+  max-height: 250px;
+  border-radius: var(--radius-sm);
+}
+
+/* 底部配置栏 */
+.bottom-bar {
+  background: white;
+  border-top: 1px solid var(--border-color);
+  padding: var(--spacing-md) var(--spacing-xl);
+}
+
+.bottom-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+/* 高级配置 */
+.advanced-config {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+
+.config-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-base);
+}
+
+.config-toggle:hover {
+  background: var(--bg-glass-hover);
+}
+
+.config-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.config-label {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.config-select {
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-size-base);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.engine-tags {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tag {
+  padding: 0.25rem 0.5rem;
+  font-size: var(--font-size-xs);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.tag.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.tag:hover:not(.active) {
+  background: var(--bg-glass-hover);
+}
+
+.config-slider {
+  width: 100px;
+}
+
+/* 底部操作按钮 */
+.bottom-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+/* 隐藏原有的上传区域和其他不需要的元素 */
+.upload-area:not(.dropzone-large) {
+  display: none;
+}
+
+.lanhu-input {
+  display: none;
+}
+
+.input-hint {
+  display: none;
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .compare-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .config-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .advanced-config {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .bottom-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .advanced-config {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bottom-actions {
+    width: 100%;
+  }
+
+  .bottom-actions button {
+    flex: 1;
+  }
+}
+</style>
