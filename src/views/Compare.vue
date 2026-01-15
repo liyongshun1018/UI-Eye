@@ -218,7 +218,6 @@
 </template>
 
 <script setup>
-// @ts-nocheck
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@/config/constants'
@@ -243,7 +242,7 @@ const availableAiModels = Object.values(AI_MODELS)
 // 视口预设
 const viewportPresets = VIEWPORT_PRESETS
 
-// 表单配置
+/** @type {import('../types').CompareConfig} */
 const config = reactive({
   url: '',
   mode: 'upload',

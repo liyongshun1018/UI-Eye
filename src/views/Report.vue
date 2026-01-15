@@ -137,9 +137,15 @@ const reportId = route.params.id
 
 const isLoading = ref(true)
 const errorMessage = ref('')
+/** @type {import('vue').Ref<import('../types').CompareReport | undefined>} */
 const reportData = ref()
+
+/** @type {import('vue').Ref<'side-by-side' | 'slider' | 'overlay' | 'diff'>} */
 const comparisonMode = ref('side-by-side')
+
 const showOriginalDiff = ref(false)
+
+/** @type {import('vue').Ref<import('../types').DiffRegion | null>} */
 const selectedRegion = ref(null)
 
 // 模式定义

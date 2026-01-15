@@ -37,3 +37,5 @@ server/reports/*
 # Database
 *.db
 *.sqlite
+*.db-wal
+*.db-shm
