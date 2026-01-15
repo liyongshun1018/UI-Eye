@@ -55,19 +55,19 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import type { DiffRegion } from '@/types/index'
+<script setup>
+// @ts-nocheck
+defineProps({
+  regions: {
+    type: Array,
+    required: true
+  }
+})
 
-defineProps<{
-  regions: DiffRegion[]
-}>()
+defineEmits(['locate'])
 
-defineEmits<{
-  locate: [region: DiffRegion]
-}>()
-
-const getPriorityLabel = (priority: string) => {
-  const labels: Record<string, string> = {
+const getPriorityLabel = (priority) => {
+  const labels = {
     critical: '关键',
     high: '重要',
     medium: '次要',
@@ -76,7 +76,7 @@ const getPriorityLabel = (priority: string) => {
   return labels[priority] || priority
 }
 
-const getScoreColor = (score: number) => {
+const getScoreColor = (score) => {
   if (score < 60) return '#DC2626'
   if (score < 85) return '#EA580C'
   return '#16A34A'

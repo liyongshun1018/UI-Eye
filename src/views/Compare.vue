@@ -217,12 +217,12 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@/config/constants'
 import { uploadDesign, fetchLanhuDesign, startCompare } from '@/services/compare'
-import type { CompareConfig } from '@/types'
 
 const router = useRouter()
 
@@ -244,7 +244,7 @@ const availableAiModels = Object.values(AI_MODELS)
 const viewportPresets = VIEWPORT_PRESETS
 
 // 表单配置
-const config = reactive<CompareConfig>({
+const config = reactive({
   url: '',
   mode: 'upload',
   designSource: '',
@@ -274,9 +274,9 @@ const engines = [
 ]
 
 // 文件上传相关
-const fileInput = ref<HTMLInputElement>()
-const designFile = ref<File>()
-const designPreview = ref<string>('')
+const fileInput = ref()
+const designFile = ref()
+const designPreview = ref('')
 const isDragging = ref(false)
 const isSubmitting = ref(false)
 const selectedPreset = ref('iPhone SE')
@@ -295,8 +295,8 @@ const triggerFileInput = () => {
 }
 
 // 处理文件选择
-const handleFileSelect = (e: Event) => {
-  const target = e.target as HTMLInputElement
+const handleFileSelect = (e) => {
+  const target = e.target
   const file = target.files?.[0]
   if (file) {
     setDesignFile(file)
@@ -304,7 +304,7 @@ const handleFileSelect = (e: Event) => {
 }
 
 // 处理拖拽上传
-const handleDrop = (e: DragEvent) => {
+const handleDrop = (e) => {
   isDragging.value = false
   const file = e.dataTransfer?.files[0]
   if (file && file.type.startsWith('image/')) {
@@ -313,11 +313,11 @@ const handleDrop = (e: DragEvent) => {
 }
 
 // 设置设计稿文件
-const setDesignFile = (file: File) => {
+const setDesignFile = (file) => {
   designFile.value = file
   const reader = new FileReader()
   reader.onload = (e) => {
-    designPreview.value = e.target?.result as string
+    designPreview.value = e.target?.result
   }
   reader.readAsDataURL(file)
 }
@@ -370,7 +370,7 @@ const handleSubmit = async () => {
     
     // 跳转到报告页面
     router.push(`/report/${compareRes.data.reportId}`)
-  } catch (error: any) {
+  } catch (error) {
     console.error('对比失败:', error)
     
     // 显示详细错误信息

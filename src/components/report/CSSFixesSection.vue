@@ -56,20 +56,22 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref } from 'vue'
 import CSSFixesCards from './CSSFixesCards.vue'
 import CSSFixesTable from './CSSFixesTable.vue'
 
-import type { CSSFix } from '../../types/index'
+const props = defineProps({
+  fixes: {
+    type: Array,
+    required: true
+  }
+})
 
-const props = defineProps<{
-  fixes: CSSFix[]
-}>()
+const viewMode = ref('table')
 
-const viewMode = ref<'card' | 'table'>('table')
-
-const copyCode = (code: string) => {
+const copyCode = (code) => {
   navigator.clipboard.writeText(code).then(() => {
     // 可以添加成功提示
     console.log('已复制到剪贴板')

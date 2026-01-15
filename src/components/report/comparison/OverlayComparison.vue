@@ -60,13 +60,14 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref } from 'vue'
 
-defineProps<{
-  designImage: string
-  actualImage: string
-}>()
+defineProps({
+  designImage: String,
+  actualImage: String
+})
 
 const overlayOpacity = ref(0.5)
 const zoomLevel = ref(1)

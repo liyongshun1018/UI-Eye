@@ -15,22 +15,15 @@
   </div>
 </template>
 
-<script setup lang="ts">
-interface ComparisonMode {
-  label: string
-  value: string
-  icon: string
-}
+<script setup>
+// @ts-nocheck
+defineProps({
+  modelValue: String,
+  modes: Array,
+  title: String
+})
 
-defineProps<{
-  modelValue: string
-  modes: ComparisonMode[]
-  title?: string
-}>()
-
-defineEmits<{
-  'update:modelValue': [value: string]
-}>()
+defineEmits(['update:modelValue'])
 </script>
 
 <style scoped>

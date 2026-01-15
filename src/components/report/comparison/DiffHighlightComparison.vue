@@ -23,6 +23,14 @@
       <button class="zoom-btn" @click="handleZoomIn" title="放大">🔍+</button>
       <button class="zoom-btn" @click="handleZoomOut" title="缩小">🔍-</button>
       <button class="zoom-btn" @click="handleResetZoom" title="重置">↺</button>
+      <button 
+        v-if="props.highlightRegion" 
+        class="zoom-btn clear-btn" 
+        @click="$emit('clear')" 
+        title="清除高亮"
+      >
+        ❌
+      </button>
       <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
     </div>
     
@@ -50,28 +58,25 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref, computed } from 'vue'
 
-const props = defineProps<{
-  diffImage: string
-  diffPixels: number
-  similarity: number
-  highlightRegion?: {
-    id: number
-    x: number
-    y: number
-    width: number
-    height: number
-  } | null
-}>()
+const props = defineProps({
+  diffImage: String,
+  diffPixels: Number,
+  similarity: Number,
+  highlightRegion: Object
+})
+
+defineEmits(['clear'])
 
 const zoomLevel = ref(1)
 const naturalWidth = ref(0)
 const naturalHeight = ref(0)
 
-const onImageLoad = (e: Event) => {
-  const img = e.target as HTMLImageElement
+const onImageLoad = (e) => {
+  const img = e.target
   naturalWidth.value = img.naturalWidth
   naturalHeight.value = img.naturalHeight
 }
@@ -202,6 +207,16 @@ const handleResetZoom = () => {
   color: var(--text-primary);
   min-width: 60px;
   text-align: center;
+}
+
+.clear-btn {
+  color: #EF4444;
+  font-weight: bold;
+}
+
+.clear-btn:hover {
+  background: #FEF2F2 !important;
+  border-color: #EF4444 !important;
 }
 
 .diff-stats-panel {

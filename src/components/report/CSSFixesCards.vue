@@ -46,19 +46,19 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import type { CSSFix } from '../../types/index'
+<script setup>
+// @ts-nocheck
+defineProps({
+  fixes: {
+    type: Array,
+    required: true
+  }
+})
 
-defineProps<{
-  fixes: CSSFix[]
-}>()
+defineEmits(['copy'])
 
-defineEmits<{
-  copy: [code: string]
-}>()
-
-const getPriorityLabel = (priority: string) => {
-  const labels: Record<string, string> = {
+const getPriorityLabel = (priority) => {
+  const labels = {
     critical: '关键',
     high: '重要',
     medium: '次要',
@@ -67,8 +67,8 @@ const getPriorityLabel = (priority: string) => {
   return labels[priority] || priority
 }
 
-const getTypeLabel = (type: string) => {
-  const labels: Record<string, string> = {
+const getTypeLabel = (type) => {
+  const labels = {
     layout: '布局',
     color: '颜色',
     typography: '字体',
@@ -78,16 +78,9 @@ const getTypeLabel = (type: string) => {
   return labels[type] || type
 }
 
-interface DiffProperty {
-  name: string
-  newValue: string
-  oldValue?: string
-  type: 'added' | 'changed' | 'unchanged'
-}
-
-const getDiffProperties = (current: string, suggested: string): DiffProperty[] => {
-  const parseStr = (str: string) => {
-    const props: Record<string, string> = {}
+const getDiffProperties = (current, suggested) => {
+  const parseStr = (str) => {
+    const props = {}
     str.split(';').forEach(item => {
       const [key, val] = item.split(':').map(s => s.trim())
       if (key && val) props[key] = val

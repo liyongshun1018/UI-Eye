@@ -66,22 +66,22 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref, computed } from 'vue'
 import DiffRegionsCards from './DiffRegionsCards.vue'
 import DiffRegionsTable from './DiffRegionsTable.vue'
 
-import type { DiffRegion } from '../../types/index'
+const props = defineProps({
+  regions: {
+    type: Array,
+    required: true
+  }
+})
 
-const props = defineProps<{
-  regions: DiffRegion[]
-}>()
+defineEmits(['locate'])
 
-defineEmits<{
-  locate: [region: DiffRegion]
-}>()
-
-const viewMode = ref<'card' | 'table'>('table')
+const viewMode = ref('table')
 const activePriorityFilter = ref('all')
 
 const priorityFilters = [

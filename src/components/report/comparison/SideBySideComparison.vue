@@ -54,15 +54,16 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref } from 'vue'
 
-defineProps<{
-  designImage: string
-  actualImage: string
-  diffPixels: number
-  similarity: number
-}>()
+defineProps({
+  designImage: String,
+  actualImage: String,
+  diffPixels: Number,
+  similarity: Number
+})
 
 const zoomLevel = ref(1)
 

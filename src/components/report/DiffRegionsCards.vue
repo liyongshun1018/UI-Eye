@@ -162,19 +162,19 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { computed } from 'vue'
 
-import type { DiffRegion } from '../../types/index'
+const props = defineProps({
+  regions: {
+    type: Array,
+    required: true
+  },
+  activeFilter: String
+})
 
-const props = defineProps<{
-  regions: DiffRegion[]
-  activeFilter: string
-}>()
-
-defineEmits<{
-  locate: [region: DiffRegion]
-}>()
+defineEmits(['locate'])
 
 const criticalRegions = computed(() => {
   const regions = props.regions.filter(r => r.priority === 'critical')

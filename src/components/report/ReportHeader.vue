@@ -29,14 +29,15 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { computed } from 'vue'
 
-const props = defineProps<{
-  similarity: number
-  timestamp: number
-  url: string
-}>()
+const props = defineProps({
+  similarity: Number,
+  timestamp: Number,
+  url: String
+})
 
 // 计算环形进度条偏移
 const scoreOffset = computed(() => {

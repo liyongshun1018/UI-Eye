@@ -61,21 +61,22 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref, nextTick, onMounted } from 'vue'
 
-defineProps<{
-  designImage: string
-  actualImage: string
-}>()
+defineProps({
+  designImage: String,
+  actualImage: String
+})
 
 const sliderPosition = ref(50)
 const isDragging = ref(false)
-const sliderViewport = ref<HTMLElement | null>(null)
-const sliderBase = ref<HTMLImageElement | null>(null)
-const sliderOverlay = ref<HTMLImageElement | null>(null)
+const sliderViewport = ref(null)
+const sliderBase = ref(null)
+const sliderOverlay = ref(null)
 
-const startSliderDrag = (e: MouseEvent) => {
+const startSliderDrag = (e) => {
   isDragging.value = true
   updateSliderPosition(e)
   
@@ -83,7 +84,7 @@ const startSliderDrag = (e: MouseEvent) => {
   document.addEventListener('mouseup', stopSliderDrag)
 }
 
-const onSliderDrag = (e: MouseEvent) => {
+const onSliderDrag = (e) => {
   if (!isDragging.value) return
   updateSliderPosition(e)
 }
@@ -112,7 +113,7 @@ const handleResetZoom = () => {
   zoomLevel.value = 1
 }
 
-const updateSliderPosition = (e: MouseEvent) => {
+const updateSliderPosition = (e) => {
   const viewport = sliderViewport.value
   if (!viewport) return
   

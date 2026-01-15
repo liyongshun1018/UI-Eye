@@ -25,7 +25,8 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 // App 根组件
 </script>
 

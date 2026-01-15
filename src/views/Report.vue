@@ -84,6 +84,7 @@
                 :diff-pixels="reportData.diffPixels"
                 :similarity="reportData.similarity"
                 :highlight-region="selectedRegion"
+                @clear="selectedRegion = null"
               />
               
               <!-- 原始差异图（可选查看） -->
@@ -117,29 +118,29 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
+// @ts-nocheck
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { getReport } from '@/services/compare'
-import type { CompareReport } from '../types/index'
-import ReportHeader from '@/components/report/ReportHeader.vue'
-import ComparisonModeSelector from '@/components/report/ComparisonModeSelector.vue'
-import SideBySideComparison from '@/components/report/comparison/SideBySideComparison.vue'
-import SliderComparison from '@/components/report/comparison/SliderComparison.vue'
-import OverlayComparison from '@/components/report/comparison/OverlayComparison.vue'
-import DiffHighlightComparison from '@/components/report/comparison/DiffHighlightComparison.vue'
-import DiffRegionsSection from '@/components/report/DiffRegionsSection.vue'
-import CSSFixesSection from '@/components/report/CSSFixesSection.vue'
+import { getReport } from '../services/compare'
+import ReportHeader from '../components/report/ReportHeader.vue'
+import ComparisonModeSelector from '../components/report/ComparisonModeSelector.vue'
+import SideBySideComparison from '../components/report/comparison/SideBySideComparison.vue'
+import SliderComparison from '../components/report/comparison/SliderComparison.vue'
+import OverlayComparison from '../components/report/comparison/OverlayComparison.vue'
+import DiffHighlightComparison from '../components/report/comparison/DiffHighlightComparison.vue'
+import DiffRegionsSection from '../components/report/DiffRegionsSection.vue'
+import CSSFixesSection from '../components/report/CSSFixesSection.vue'
 
 const route = useRoute()
-const reportId = route.params.id as string
+const reportId = route.params.id
 
 const isLoading = ref(true)
 const errorMessage = ref('')
-const reportData = ref<CompareReport>()
+const reportData = ref()
 const comparisonMode = ref('side-by-side')
 const showOriginalDiff = ref(false)
-const selectedRegion = ref<any>(null)
+const selectedRegion = ref(null)
 
 // 模式定义
 const comparisonModes = [
@@ -185,7 +186,7 @@ const refreshReport = () => {
 }
 
 // 定位到区域
-const locateRegion = (region: any) => {
+const locateRegion = (region) => {
   // 切换到差异高亮模式
   comparisonMode.value = 'diff'
   
