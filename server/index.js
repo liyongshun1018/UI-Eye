@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url'
 import fs from 'fs'
 import dotenv from 'dotenv'
 import { createReport, updateReport, getReport, getReportList, deleteOldReports } from './database.js'
+import batchRoutes from './routes/batchRoutes.js'
 
 // 加载环境变量
 dotenv.config()
@@ -73,6 +74,9 @@ app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Server is running' })
 })
 
+
+// 批量任务路由
+app.use('/api/batch', batchRoutes)
 // 新增：HTML 预览代理接口 (支持 CSS 注入)
 app.get('/api/proxy-preview', async (req, res) => {
     console.log('[DEBUG] 命中预览代理接口')
