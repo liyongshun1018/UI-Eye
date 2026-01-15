@@ -10,30 +10,15 @@ const batchTaskService = new BatchTaskService();
  */
 router.post('/tasks', async (req, res) => {
     try {
-        const { name, urls, domain, options } = req.body;
-
-        // 验证参数
+        const { name, urls, domain, options, script_id } = req.body;
         if (!name || !urls || !Array.isArray(urls) || urls.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: '参数错误：name 和 urls 是必需的'
-            });
+            return res.status(400).json({ success: false, message: '无效的任务数据' });
         }
 
-        // 创建任务
-        const taskId = batchTaskService.createTask(name, urls, domain, options);
-
-        res.json({
-            success: true,
-            taskId,
-            message: '批量任务已创建'
-        });
+        const taskId = batchTaskService.createTask(name, urls, domain, { ...options, script_id });
+        res.json({ success: true, taskId, message: '任务已创建' });
     } catch (error) {
-        console.error('创建批量任务失败:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 

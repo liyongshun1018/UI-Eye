@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
+import scriptExecutor from './ScriptExecutor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +77,14 @@ class BatchScreenshotService {
                         timeout: options.timeout || 30000
                     });
 
+                    // 如果提供了操作脚本，则执行
+                    if (options.scriptCode) {
+                        const scriptResult = await scriptExecutor.execute(page, options.scriptCode);
+                        if (!scriptResult.success) {
+                            console.warn(`  ⚠️  脚本执行告警: ${scriptResult.error}`);
+                        }
+                    }
+
                     // 等待额外时间（可选）
                     if (options.waitAfterLoad) {
                         await page.waitForTimeout(options.waitAfterLoad);
@@ -110,6 +119,12 @@ class BatchScreenshotService {
                     });
                 } finally {
                     await page.close();
+
+                    // 调用进度回调，传入当前索引、总数、当前 URL 和最新的结果信息
+                    if (options.onProgress) {
+                        const lastResult = results[results.length - 1];
+                        options.onProgress(results.length, urls.length, url, lastResult);
+                    }
                 }
             }
 

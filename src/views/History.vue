@@ -118,6 +118,9 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getReportList } from '@/services/compare'
 import type { CompareReport } from '@/types'
+import { useDialog } from '@/composables/useDialog'
+
+const { showConfirm, showError } = useDialog()
 
 const router = useRouter()
 const reports = ref<CompareReport[]>([])
@@ -194,7 +197,8 @@ const viewReport = (id: string) => {
 }
 
 const deleteReport = async (id: string) => {
-  if (!confirm('确定要删除这条对比记录吗？')) {
+  const confirmed = await showConfirm('确定要删除这条对比记录吗？')
+  if (!confirmed) {
     return
   }
   
@@ -211,7 +215,7 @@ const deleteReport = async (id: string) => {
     }
   } catch (err) {
     console.error('删除失败:', err)
-    alert('删除失败，请重试')
+    showError('删除失败，请重试')
   }
 }
 

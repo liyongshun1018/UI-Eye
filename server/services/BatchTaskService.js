@@ -1,6 +1,8 @@
 import { getDatabase } from '../database.js';
 import BatchScreenshotService from './BatchScreenshotService.js';
 import PlaywrightAuthService from './PlaywrightAuthService.js';
+import wsServer from './WSServer.js';
+import ScriptService from './ScriptService.js';
 
 /**
  * 批量任务管理服务
@@ -11,6 +13,7 @@ class BatchTaskService {
         this.db = getDatabase();
         this.authService = new PlaywrightAuthService();
         this.batchScreenshotService = new BatchScreenshotService(this.authService);
+        this.scriptService = new ScriptService();
         this.runningTasks = new Map(); // 存储正在运行的任务
 
         // 初始化批量任务表
@@ -57,14 +60,15 @@ class BatchTaskService {
      */
     createTask(name, urls, domain = null, options = {}) {
         const stmt = this.db.prepare(`
-      INSERT INTO batch_tasks (name, urls, domain, total, status)
-      VALUES (?, ?, ?, ?, 'pending')
+      INSERT INTO batch_tasks (name, urls, domain, script_id, total, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
     `);
 
         const result = stmt.run(
             name,
             JSON.stringify(urls),
             domain,
+            options.script_id || null,
             urls.length
         );
 
@@ -96,18 +100,21 @@ class BatchTaskService {
         // 更新状态为 running
         this.updateTaskStatus(taskId, 'running');
 
+        // 通过 WebSocket 广播任务启动
+        wsServer.broadcastTaskUpdate(taskId, 'task:started', { taskId, status: 'running' });
+
         // 标记为运行中
         this.runningTasks.set(taskId, true);
 
         // 异步执行任务
         this.executeTask(taskId, onProgress).catch(error => {
-            console.error(`任务 ${taskId} 执行失败:`, error);
+            console.error(`任务 ${taskId} 执行失败: `, error);
             this.updateTaskStatus(taskId, 'failed', error.message);
         }).finally(() => {
             this.runningTasks.delete(taskId);
         });
 
-        console.log(`🚀 启动批量任务: ${taskId}`);
+        console.log(`🚀 启动批量任务: ${taskId} `);
     }
 
     /**
@@ -117,10 +124,19 @@ class BatchTaskService {
      */
     async executeTask(taskId, onProgress = null) {
         const task = this.getTask(taskId);
-        const urls = JSON.parse(task.urls);
+        const urls = task.urls;
         const startTime = Date.now();
 
         try {
+            // 获取脚本代码（如果存在）
+            let scriptCode = null;
+            if (task.script_id) {
+                const script = this.scriptService.getScript(task.script_id);
+                if (script) {
+                    scriptCode = script.code;
+                }
+            }
+
             // 执行批量截图
             const result = await this.batchScreenshotService.batchScreenshot(
                 urls,
@@ -128,18 +144,25 @@ class BatchTaskService {
                 {
                     headless: true,
                     fullPage: true,
-                    onProgress: (current, total, currentUrl) => {
+                    scriptCode, // 传入脚本代码
+                    onProgress: (current, total, currentUrl, lastResult) => {
                         // 更新进度
                         this.updateTaskProgress(taskId, current, total);
 
+                        const progressData = {
+                            current,
+                            total,
+                            progress: Math.round((current / total) * 100),
+                            currentUrl,
+                            lastResult // 包含最新的截图结果
+                        };
+
+                        // 通过 WebSocket 广播进度
+                        wsServer.broadcastTaskUpdate(taskId, 'task:progress', progressData);
+
                         // 调用外部进度回调
                         if (onProgress) {
-                            onProgress(taskId, {
-                                current,
-                                total,
-                                progress: Math.round((current / total) * 100),
-                                currentUrl
-                            });
+                            onProgress(taskId, progressData);
                         }
                     }
                 }
@@ -151,13 +174,13 @@ class BatchTaskService {
             const stmt = this.db.prepare(`
         UPDATE batch_tasks 
         SET status = 'completed',
-            success = ?,
-            failed = ?,
-            duration = ?,
-            results = ?,
-            completed_at = CURRENT_TIMESTAMP
+    success = ?,
+    failed = ?,
+    duration = ?,
+    results = ?,
+    completed_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `);
+    `);
 
             stmt.run(
                 result.success,
@@ -169,6 +192,13 @@ class BatchTaskService {
 
             console.log(`✅ 任务 ${taskId} 完成: 成功 ${result.success}/${result.total}`);
 
+            // 通过 WebSocket 广播完成状态
+            wsServer.broadcastTaskUpdate(taskId, 'task:completed', {
+                taskId,
+                status: 'completed',
+                ...result
+            });
+
             // 调用完成回调
             if (onProgress) {
                 onProgress(taskId, {
@@ -179,6 +209,14 @@ class BatchTaskService {
         } catch (error) {
             console.error(`❌ 任务 ${taskId} 失败:`, error);
             this.updateTaskStatus(taskId, 'failed', error.message);
+
+            // 通过 WebSocket 广播失败状态
+            wsServer.broadcastTaskUpdate(taskId, 'task:failed', {
+                taskId,
+                status: 'failed',
+                error: error.message
+            });
+
             throw error;
         }
     }
@@ -337,7 +375,8 @@ class BatchTaskService {
             startedAt: row.started_at,
             completedAt: row.completed_at,
             results: row.results ? JSON.parse(row.results) : null,
-            errorMessage: row.error_message
+            errorMessage: row.error_message,
+            script_id: row.script_id
         };
     }
 }

@@ -26,6 +26,36 @@ const routes: RouteRecordRaw[] = [
         path: '/history',
         name: 'history',
         component: () => import('../views/History.vue')
+    },
+    {
+        path: '/batch-tasks',
+        name: 'BatchTaskList',
+        component: () => import('../views/BatchTaskList.vue'),
+        meta: { title: 'UI-Eye - 批量任务列表' }
+    },
+    {
+        path: '/batch-screenshot',
+        name: 'BatchScreenshot',
+        component: () => import('../views/BatchScreenshot.vue'),
+        meta: { title: 'UI-Eye - 创建批量任务' }
+    },
+    {
+        path: '/batch-tasks/:id',
+        name: 'BatchTaskMonitor',
+        component: () => import('../views/BatchTaskMonitor.vue'),
+        meta: { title: 'UI-Eye - 任务监控' }
+    },
+    {
+        path: '/scripts',
+        name: 'ScriptList',
+        component: () => import('../views/ScriptList.vue'),
+        meta: { title: 'UI-Eye - 脚本管理' }
+    },
+    {
+        path: '/scripts/:id',
+        name: 'ScriptEditor',
+        component: () => import('../views/ScriptEditor.vue'),
+        meta: { title: 'UI-Eye - 脚本编辑' }
     }
 ]
 

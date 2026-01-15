@@ -90,6 +90,9 @@
  * 核心逻辑：通过后端代理加载目标网页，并实时注入 AI 建议的 CSS 修复代码。
  */
 import { ref, computed, watch } from 'vue'
+import { useDialog } from '@/composables/useDialog'
+
+const { showSuccess, showError } = useDialog()
 
 const props = defineProps({
   show: Boolean,
@@ -195,10 +198,10 @@ const copyCSS = async () => {
   
   try {
     await navigator.clipboard.writeText(props.css)
-    alert('✅ CSS 代码已复制到剪贴板')
+    showSuccess('CSS 代码已复制到剪贴板')
   } catch (err) {
     console.error('复制失败:', err)
-    alert('❌ 复制失败，请手动选择代码复制')
+    showError('复制失败，请手动选择代码复制')
   }
 }
 

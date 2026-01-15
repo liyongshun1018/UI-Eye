@@ -8,6 +8,9 @@ import fs from 'fs'
 import dotenv from 'dotenv'
 import { createReport, updateReport, getReport, getReportList, deleteOldReports } from './database.js'
 import batchRoutes from './routes/batchRoutes.js'
+import scriptRoutes from './routes/scriptRoutes.js'
+import http from 'http'
+import wsServer from './services/WSServer.js'
 
 // 加载环境变量
 dotenv.config()
@@ -26,6 +29,7 @@ app.use(express.urlencoded({ extended: true }))
 // 静态文件服务
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 app.use('/reports', express.static(path.join(__dirname, 'reports')))
+app.use('/api/batch/screenshots', express.static(path.join(__dirname, 'screenshots/batch')))
 
 // 确保目录存在
 const ensureDir = (dir) => {
@@ -77,6 +81,8 @@ app.get('/api/health', (req, res) => {
 
 // 批量任务路由
 app.use('/api/batch', batchRoutes)
+// 脚本管理路由 (统一挂载在 /api/batch 下)
+app.use('/api/batch/scripts', scriptRoutes)
 // 新增：HTML 预览代理接口 (支持 CSS 注入)
 app.get('/api/proxy-preview', async (req, res) => {
     console.log('[DEBUG] 命中预览代理接口')
@@ -432,10 +438,17 @@ app.use((err, req, res, next) => {
     })
 })
 
+// 创建 HTTP 服务器供 WebSocket 使用
+const server = http.createServer(app)
+
+// 初始化 WebSocket 服务
+wsServer.init(server)
+
 // 启动服务器
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`\n🚀 UI-Eye 后端服务已启动`)
     console.log(`📍 服务地址: http://localhost:${PORT}`)
+    console.log(`🔌 WebSocket: ws://localhost:${PORT}`)
     console.log(`📁 上传目录: ${path.join(__dirname, 'uploads')}`)
     console.log(`📊 报告目录: ${path.join(__dirname, 'reports')}`)
     console.log(`\n按 Ctrl+C 停止服务\n`)

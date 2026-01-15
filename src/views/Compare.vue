@@ -236,6 +236,9 @@ import { useRouter } from 'vue-router'
 import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@/config/constants'
 // 导入对比相关的 API 服务
 import { uploadDesign, fetchLanhuDesign, startCompare } from '@/services/compare'
+import { useDialog } from '@/composables/useDialog'
+
+const { showError } = useDialog()
 
 /** 路由实例，用于任务启动后的跳转 */
 const router = useRouter()
@@ -415,7 +418,7 @@ const handleSubmit = async () => {
     // 统一的异常捕获与友好 UI 提示
     console.error('对比链路异常:', error)
     const errorMessage = error.message || '对比失败，请重试'
-    alert(`❌ ${errorMessage}\n\n解决建议：\n1. 检查页面 URL 是否外网可访问\n2. 确认远程图片地址是否已失效\n3. 检查控制台网络连接状态`)
+    showError(`${errorMessage}\n\n解决建议：\n1. 检查页面 URL 是否外网可访问\n2. 确认远程图片地址是否已失效\n3. 检查控制台网络连接状态`)
   } finally {
     // 无论是成功还是失败，最终都要解锁提交按钮
     isSubmitting.value = false
