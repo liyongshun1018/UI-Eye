@@ -10,76 +10,68 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 /**
- * 图像对比服务类
- * 负责像素级图像对比和差异分析
+ * CompareService.js - 图像对比核心服务
+ * 负责两张图片的像素级比较、尺寸对齐、差异图生成以及后续的差异聚类分析。
  */
 class CompareService {
     /**
-     * 构造函数
+     * 构造对比服务
+     * 初始化默认参数并实例化差异聚类服务。
      */
     constructor() {
         this.defaultOptions = {
-            threshold: 0.1,      // 容差值 0-1
-            includeAA: false,    // 是否包含抗锯齿差异
-            alpha: 0.1,          // 透明度
-            diffColor: [255, 0, 0],      // 红色标注差异
-            diffColorAlt: [255, 200, 0]  // 橙色标注次要差异
+            threshold: 0.1,      // 匹配容差 (0-1)，数值越小越敏锐
+            includeAA: false,    // 是否将抗锯齿像素视为差异
+            alpha: 0.1,          // 差异图背景透明度
+            diffColor: [255, 0, 0],      // 显著差异标注色 (红色)
+            diffColorAlt: [255, 200, 0]  // 次要差异标注色 (橙色)
         }
 
-        // 初始化差异聚类服务
+        /** 初始化差异聚类引擎，用于将离散的像素差异聚合成有意义的区域 */
         this.clusteringService = new DiffClusteringService({
-            minRegionSize: 100,
-            neighborhoodRadius: 10,
-            maxRegions: 20,
-            padding: 5
+            minRegionSize: 100,      // 过滤掉小于 100 像素的微小噪点
+            neighborhoodRadius: 10,  // 连通域搜索半径
+            maxRegions: 20,          // 最多提取 20 个核心差异点
+            padding: 5               // 标注框留白
         })
     }
 
     /**
-     * 对比两张图片
-     * @param {string} designPath - 设计稿路径
-     * @param {string} actualPath - 实际页面截图路径
-     * @param {Object} options - 对比选项
-     * @param {number} options.threshold - 容差值
-     * @param {boolean} options.includeAA - 是否包含抗锯齿差异
-     * @param {boolean} options.enableClustering - 是否启用差异聚类（默认 true）
-     * @returns {Promise<Object>} 对比结果
-     * @returns {number} return.similarity - 相似度百分比
-     * @returns {number} return.diffPixels - 差异像素数
-     * @returns {number} return.totalPixels - 总像素数
-     * @returns {Object} return.diffImage - 差异图信息
-     * @returns {Array} return.diffRegions - 差异区域列表（如果启用聚类）
+     * 主入口：对比两张图片并生成深度分析报告
+     * 流程：对齐尺寸 -> 执行像素级对比 -> 计算相似度 -> (可选) 聚类聚合 -> (可选) 绘制标注框
+     * @param {string} designPath - 设计稿文件的绝对路径
+     * @param {string} actualPath - 实际截图文件的绝对路径
+     * @param {Object} options - 自定义对比选项
+     * @returns {Promise<Object>} 包含相似度、差异区域及图片 URL 的结果对象
      */
     async compare(designPath, actualPath, options = {}) {
         const config = {
             ...this.defaultOptions,
-            engine: 'pixelmatch', // 默认引擎
-            enableClustering: true,
+            engine: 'pixelmatch', // 默认使用高性能 pixelmatch 引擎
+            enableClustering: true, // 默认开启智能聚类分析
             ...options
         }
         try {
-            console.log('[对比服务] 开始图像对比')
-            console.log('[对比服务] 引擎:', config.engine)
+            console.log('[对比服务] 启动图像分析链路')
+            console.log(`[对比服务] 算法引擎: ${config.engine}`)
 
             let result
 
-            // 根据引擎选择对比方法
+            // 1. 根据配置选择底层算法引擎执行初步对比
             if (config.engine === 'resemble') {
                 result = await this.compareWithResemble(designPath, actualPath, config)
             } else {
                 result = await this.compareWithPixelmatch(designPath, actualPath, config)
             }
 
-            // 如果启用聚类，分析差异区域并生成增强版差异图
+            // 智能分析环节：如果存在差异且开启了聚类功能
             if (config.enableClustering && result.diffPixels > 0) {
-
                 try {
-                    // 分析差异区域
+                    // 2. 利用聚类算法从差异图中提取语义化区域 (如：导航栏偏离、文字错位)
                     const diffRegions = await this.clusteringService.analyzeDiffRegions(result.diffImage.path)
 
                     if (diffRegions && diffRegions.length > 0) {
-
-                        // 生成带标注的增强版差异图
+                        // 3. 生成增强版差异图：在差异图像上直接绘制 ID 编号和矩形框，方便用户定位
                         const enhancedDiffPath = result.diffImage.path.replace('.png', '-annotated.png')
                         await this.clusteringService.drawRegionAnnotations(
                             result.diffImage.path,
@@ -87,7 +79,7 @@ class CompareService {
                             enhancedDiffPath
                         )
 
-                        // 更新结果
+                        // 组装最终结果
                         result.diffRegions = diffRegions
                         result.diffImage.annotatedPath = enhancedDiffPath
                         result.diffImage.annotatedUrl = `/reports/${path.basename(enhancedDiffPath)}`
@@ -95,82 +87,62 @@ class CompareService {
                         result.diffRegions = []
                     }
                 } catch (clusterError) {
-                    console.warn('[聚类失败]', clusterError.message)
+                    console.warn('[对比服务] 聚类分析失败 (非阻塞):', clusterError.message)
                     result.diffRegions = []
                 }
             }
 
             return result
         } catch (error) {
-            console.error('[对比服务] 图像对比失败:', error)
+            console.error('[对比服务] 对比链路崩溃:', error)
             throw new Error(`图像对比失败: ${error.message}`)
         }
     }
 
     /**
-     * 对齐两张图片（调整为相同尺寸）
-     * @param {string} path1 - 图片1路径
-     * @param {string} path2 - 图片2路径
-     * @returns {Promise<Object>} 对齐后的图片数据
+     * 内部方法：自动对齐两张图片
+     * 对比前必须保证两图分辨率一致。若不一致，将自动以最小公共区域进行等比例缩放/裁剪。
      */
     async alignImages(path1, path2) {
         try {
-            // 获取两张图片的元数据
             const meta1 = await sharp(path1).metadata()
             const meta2 = await sharp(path2).metadata()
 
-            // 使用较小的尺寸作为目标尺寸
+            // 选取较小的宽高作为基准，避免放大导致的模糊失真影响对比精度
             const targetWidth = Math.min(meta1.width, meta2.width)
             const targetHeight = Math.min(meta1.height, meta2.height)
 
-            console.log(`[对比服务] 对齐图片尺寸: ${targetWidth}x${targetHeight}`)
+            console.log(`[对比服务] 正在执行尺寸归一化: ${targetWidth}x${targetHeight}`)
 
-            // 调整图片尺寸
             const buffer1 = await this.resizeImage(path1, targetWidth, targetHeight)
             const buffer2 = await this.resizeImage(path2, targetWidth, targetHeight)
 
-            // 转换为 PNG 对象
             const img1 = PNG.sync.read(buffer1)
             const img2 = PNG.sync.read(buffer2)
 
-            return {
-                img1,
-                img2,
-                width: targetWidth,
-                height: targetHeight
-            }
+            return { img1, img2, width: targetWidth, height: targetHeight }
         } catch (error) {
-            console.error('[对比服务] 图片对齐失败:', error)
+            console.error('[对比服务] 图片预处理失败:', error)
             throw new Error(`图片对齐失败: ${error.message}`)
         }
     }
 
     /**
-     * 调整图片尺寸
-     * @param {string} imagePath - 图片路径
-     * @param {number} width - 目标宽度
-     * @param {number} height - 目标高度
-     * @returns {Promise<Buffer>} 调整后的图片缓冲区
+     * 内部方法：使用 Sharp 执行高效图像缩放
      */
     async resizeImage(imagePath, width, height) {
         return await sharp(imagePath)
             .resize(width, height, {
-                fit: 'cover',
-                position: 'top'
+                fit: 'cover',   // 填充模式
+                position: 'top' // 从顶部对齐，适合网页长图
             })
             .png()
             .toBuffer()
     }
 
     /**
-     * 执行像素匹配
-     * @param {PNG} img1 - 图片1
-     * @param {PNG} img2 - 图片2
-     * @param {PNG} diff - 差异图
-     * @param {number} width - 宽度
-     * @param {number} height - 高度
-     * @param {Object} config - 配置选项
-     * @returns {number} 差异像素数
+     * 内部方法：调用底层像素匹配库
+     * @returns {number} 差异像素总数
      */
     performPixelMatch(img1, img2, diff, width, height, config) {
         return pixelmatch(
@@ -190,9 +162,7 @@ class CompareService {
     }
 
     /**
-     * 保存差异图
-     * @param {PNG} diff - 差异图对象
-     * @returns {Promise<Object>} 差异图信息
+     * 内部方法：将生成的差异图保存到本地磁盘
      */
     async saveDiffImage(diff) {
         const timestamp = Date.now()
@@ -214,10 +184,7 @@ class CompareService {
     }
 
     /**
-     * 计算相似度
-     * @param {number} diffPixels - 差异像素数
-     * @param {number} totalPixels - 总像素数
-     * @returns {number} 相似度百分比
+     * 计算百分比相似度
      */
     calculateSimilarity(diffPixels, totalPixels) {
         const similarity = ((totalPixels - diffPixels) / totalPixels) * 100
@@ -225,61 +192,26 @@ class CompareService {
     }
 
     /**
-     * 分析差异区域
-     * @param {string} diffImagePath - 差异图路径
-     * @returns {Promise<Array>} 差异区域列表
-     */
-    async analyzeDiffRegions(diffImagePath) {
-        try {
-            return await this.clusteringService.analyzeDiffRegions(diffImagePath)
-        } catch (error) {
-            console.error('[对比服务] 差异区域分析失败:', error)
-            return []
-        }
-    }
-
-    /**
-     * 生成增强版差异图（带区域标注）
-     * @param {string} diffImagePath - 原始差异图路径
-     * @param {Array} regions - 差异区域列表
-     * @returns {Promise<string>} 增强版差异图路径
-     */
-    async generateEnhancedDiffImage(diffImagePath, regions) {
-        try {
-            const enhancedPath = diffImagePath.replace('.png', '-annotated.png')
-            await this.clusteringService.drawRegionAnnotations(diffImagePath, regions, enhancedPath)
-            return enhancedPath
-        } catch (error) {
-            console.error('[对比服务] 生成增强版差异图失败:', error)
-            throw error
-        }
-    }
-
-    /**
-     * 使用 Pixelmatch 引擎对比
-     * @param {string} designPath - 设计稿路径
-     * @param {string} actualPath - 实际页面路径
-     * @param {Object} config - 配置选项
-     * @returns {Promise<Object>} 对比结果
+     * 核心实现：Pixelmatch 对比逻辑
      */
     async compareWithPixelmatch(designPath, actualPath, config) {
-        // 读取并对齐图片
+        // 对齐图片
         const { img1, img2, width, height } = await this.alignImages(designPath, actualPath)
 
-        // 创建差异图
+        // 准备输出差异图缓冲区
         const diff = new PNG({ width, height })
 
-        // 执行像素对比
+        // 像素级逐行扫描比较
         const diffPixels = this.performPixelMatch(img1, img2, diff, width, height, config)
 
-        // 保存基础差异图
+        // 保存文件
         const diffImage = await this.saveDiffImage(diff)
 
         // 计算相似度
         const totalPixels = width * height
         const similarity = this.calculateSimilarity(diffPixels, totalPixels)
 
-        console.log(`[对比服务] Pixelmatch对比完成: 相似度 ${similarity}%`)
+        console.log(`[对比服务] Pixelmatch 对比完成，相似度: ${similarity}%`)
 
         return {
             similarity,
@@ -292,11 +224,8 @@ class CompareService {
     }
 
     /**
-     * 使用 Resemble.js 引擎对比
-     * @param {string} designPath - 设计稿路径
-     * @param {string} actualPath - 实际页面路径
-     * @param {Object} config - 配置选项
-     * @returns {Promise<Object>} 对比结果
+     * 扩展接口：Resemble.js 对比逻辑
+     * 适合需要忽略颜色差异或抗锯齿更智能的场景。
      */
     async compareWithResemble(designPath, actualPath, config) {
         const ResembleCompareService = (await import('./ResembleCompareService.js')).default

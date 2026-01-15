@@ -57,11 +57,18 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * CSSFixesSection.vue - CSS 修复建议区块
+ * 汇总展示 AI 发现的所有样式差异及对应的 CSS 修复代码，支持卡片和表格两种视图。
+ */
 import { ref } from 'vue'
 import CSSFixesCards from './CSSFixesCards.vue'
 import CSSFixesTable from './CSSFixesTable.vue'
 
+/**
+ * 组件属性定义
+ * @property {Array} fixes - AI 生成的 CSS 修复建议数组
+ */
 const props = defineProps({
   fixes: {
     type: Array,
@@ -69,15 +76,23 @@ const props = defineProps({
   }
 })
 
+/** 当前视图模式：'card' (卡片) 或 'table' (表格) */
 const viewMode = ref('table')
 
+/**
+ * 复制单条 CSS 代码到剪贴板
+ * @param {string} code - 要复制的代码字符串
+ */
 const copyCode = (code) => {
   navigator.clipboard.writeText(code).then(() => {
-    // 可以添加成功提示
+    // TODO: 考虑接入全局 Toast 提示
     console.log('已复制到剪贴板')
   })
 }
 
+/**
+ * 汇总并复制所有修复建议的 CSS 代码
+ */
 const copyAllFixes = () => {
   const allCSS = props.fixes
     .map(fix => `${fix.selector} {\n  ${fix.suggestedCSS}\n}`)

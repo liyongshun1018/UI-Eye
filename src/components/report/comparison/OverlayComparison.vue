@@ -61,33 +61,50 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * OverlayComparison.vue - 重叠对比组件
+ * 核心功能：将两张图片重叠放置，通过调节上层图片的透明度（Opacity），
+ * 产生“重影”效果，帮助用户快速捕捉细微的位移、字号差异或颜色偏差。
+ */
 import { ref } from 'vue'
 
+/**
+ * 组件属性定义
+ * @property {string} designImage - 设计稿图片的 URL
+ * @property {string} actualImage - 实际抓取的页面截图 URL
+ */
 defineProps({
   designImage: String,
   actualImage: String
 })
 
-const overlayOpacity = ref(0.5)
-const zoomLevel = ref(1)
+// 响应式状态
+const overlayOpacity = ref(0.5) // 上层图片透明度 (0: 完全透明/看底层, 1: 完全不透明/看顶层)
+const zoomLevel = ref(1)        // 当前画面的放大倍率
 
+/** 
+ * 逻辑处理器：快速切换透明度 
+ * 在全透明和全不透明之间循环，产生闪烁对比效果
+ */
 const toggleOverlay = () => {
   overlayOpacity.value = overlayOpacity.value > 0.5 ? 0 : 1
 }
 
+/** 逻辑处理器：画面放大 */
 const handleZoomIn = () => {
   if (zoomLevel.value < 3) {
     zoomLevel.value += 0.25
   }
 }
 
+/** 逻辑处理器：画面缩小 */
 const handleZoomOut = () => {
   if (zoomLevel.value > 0.5) {
     zoomLevel.value -= 0.25
   }
 }
 
+/** 逻辑处理器：快捷重置 */
 const handleResetZoom = () => {
   zoomLevel.value = 1
 }

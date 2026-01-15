@@ -67,11 +67,20 @@
 </template>
 
 <script setup>
+/**
+ * DiffRegionsSection.vue - 差异区域分析区块
+ * 负责展示经过后台算法聚类后的所有差异区域列表。
+ * 支持两种查看模式（卡片/表格）以及优先级筛选。
+ */
 // @ts-nocheck
 import { ref, computed } from 'vue'
 import DiffRegionsCards from './DiffRegionsCards.vue'
 import DiffRegionsTable from './DiffRegionsTable.vue'
 
+/**
+ * 组件属性
+ * @property {Array} regions - 由后端分析出的差异区域数组
+ */
 const props = defineProps({
   regions: {
     type: Array,
@@ -79,23 +88,35 @@ const props = defineProps({
   }
 })
 
+/**
+ * 声明事件
+ * locate: 当子组件触发定位请求时，将该请求透传给父页面（Report.vue），由其控制图片组件滚动。
+ */
 defineEmits(['locate'])
 
-const viewMode = ref('table')
-const activePriorityFilter = ref('all')
+// 响应式状态控制
+const viewMode = ref('table')          // 当前视图模式：'card' (卡片) | 'table' (表格)
+const activePriorityFilter = ref('all') // 当前活跃的优先级过滤器标识
 
+/** 过滤器选项定义 */
 const priorityFilters = [
   { label: '全部', value: 'all' },
   { label: '关键', value: 'critical' },
   { label: '重要', value: 'high' }
 ]
 
+/**
+ * 计算属性：基于当前选中的过滤器对原始区域数据进行实时筛选
+ * @returns {Array} 过滤后的差异区域列表
+ */
 const filteredRegions = computed(() => {
   if (activePriorityFilter.value === 'all') {
     return props.regions
   } else if (activePriorityFilter.value === 'critical') {
+    // 仅显示最高优先级（关键）的差异
     return props.regions.filter(r => r.priority === 'critical')
   } else if (activePriorityFilter.value === 'high') {
+    // 显示关键和重要（High）的差异，过滤掉中低优先级
     return props.regions.filter(r => r.priority === 'critical' || r.priority === 'high')
   }
   return []

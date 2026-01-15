@@ -59,9 +59,19 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * DiffHighlightComparison.vue - 差异高亮对比组件
+ * 核心功能：展示像素级差异图，并支持特定差异区域（Region）的定位高亮和画面缩放。
+ */
 import { ref, computed } from 'vue'
 
+/**
+ * 组件属性定义
+ * @property {string} diffImage - 标注了差异的图片 URL
+ * @property {number} diffPixels - 总计差异像素点数量
+ * @property {number} similarity - 整体页面相似度百分比
+ * @property {Object} highlightRegion - 当前选中的需要红框定位的特定区域对象
+ */
 const props = defineProps({
   diffImage: String,
   diffPixels: Number,
@@ -69,43 +79,64 @@ const props = defineProps({
   highlightRegion: Object
 })
 
+/**
+ * 组件事件定义
+ * clear: 当点击工具栏的 X 按钮时，通知父组件清除当前选中的高亮区域
+ */
 defineEmits(['clear'])
 
-const zoomLevel = ref(1)
-const naturalWidth = ref(0)
-const naturalHeight = ref(0)
+// 响应式状态
+const zoomLevel = ref(1)       // 当前缩放倍率，默认为 1
+const naturalWidth = ref(0)    // 图片原始宽度（像素），用于坐标换算比例
+const naturalHeight = ref(0)   // 图片原始高度（像素）
 
+/**
+ * 逻辑处理器：当图片加载完成时，提取其实际自然尺寸
+ * 这是必须的，因为差异区域的坐标是基于原始图片的，我们需要将其转换为百分比。
+ */
 const onImageLoad = (e) => {
   const img = e.target
   naturalWidth.value = img.naturalWidth
   naturalHeight.value = img.naturalHeight
 }
 
+/**
+ * 计算属性：计算高亮红框的具体 CSS 样式
+ * 采用“百分比布局” + “缩放平移”方案，确保红框能随着图片缩放而同步移动。
+ */
 const getHighlightStyle = computed(() => {
+  // 如果没有选中区域或图片尚未加载出原始尺寸，则不显示红框
   if (!props.highlightRegion || !naturalWidth.value) return {}
   
   return {
+    // 基础定位：将像素坐标转换为相对于父容器的百分比
     left: `${(props.highlightRegion.x / naturalWidth.value) * 100}%`,
     top: `${(props.highlightRegion.y / naturalHeight.value) * 100}%`,
     width: `${(props.highlightRegion.width / naturalWidth.value) * 100}%`,
     height: `${(props.highlightRegion.height / naturalHeight.value) * 100}%`,
+    
+    // 缩放修正：红框自身的缩放必须跟随图片缩放率
     transform: `scale(${zoomLevel.value})`,
+    // 关键点：保持左上角锚点一致，防止缩放后位置漂移
     transformOrigin: 'top left'
   }
 })
 
+/** 逻辑处理器：画面放大，最高限额 3 倍 */
 const handleZoomIn = () => {
   if (zoomLevel.value < 3) {
     zoomLevel.value += 0.25
   }
 }
 
+/** 逻辑处理器：画面缩小，最低限额 0.5 倍 */
 const handleZoomOut = () => {
   if (zoomLevel.value > 0.5) {
     zoomLevel.value -= 0.25
   }
 }
 
+/** 逻辑处理器：快捷重置缩放比例 */
 const handleResetZoom = () => {
   zoomLevel.value = 1
 }

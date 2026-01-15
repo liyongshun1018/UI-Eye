@@ -26,8 +26,11 @@
 </template>
 
 <script setup>
-// @ts-nocheck
-// App 根组件
+/**
+ * App.vue - 应用根组件
+ * 承载全局导航栏和路由视图入口。
+ * 提供响应式的布局基础，包括置顶导航和自适应主内容区。
+ */
 </script>
 
 <style scoped>

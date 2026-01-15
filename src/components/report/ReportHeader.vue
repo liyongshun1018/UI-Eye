@@ -30,22 +30,38 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * ReportHeader.vue - 报告头部组件
+ * 展示报告的核心元数据，包括所属 URL、生成时间，以及一个极具视觉冲击力的“还原度”环形仪表盘。
+ */
 import { computed } from 'vue'
 
+/**
+ * 组件属性定义
+ * @property {number} similarity - 整体相似度百分比 (0-100)
+ * @property {number} timestamp - 报告生成的毫秒级时间戳
+ * @property {string} url - 对比的目标在线地址
+ */
 const props = defineProps({
   similarity: Number,
   timestamp: Number,
   url: String
 })
 
-// 计算环形进度条偏移
+/**
+ * 计算环形进度条的 CSS stroke-dashoffset
+ * 原理：通过相似度百分比计算出环形路径（周长约为 283px）需要被“偏移”掉的空白长度。
+ * @returns {number} 环形描边的偏移量
+ */
 const scoreOffset = computed(() => {
-  const circumference = 2 * Math.PI * 45
+  const circumference = 2 * Math.PI * 45 // 45 是 circle 标签中定义的半径 r
   return circumference - (props.similarity / 100) * circumference
 })
 
-// 格式化日期
+/** 
+ * 格式化日期显示 
+ * 将 Unix 时间戳转换为符合中文习惯的本地字符串
+ */
 const formattedDate = computed(() => {
   return new Date(props.timestamp).toLocaleString('zh-CN')
 })

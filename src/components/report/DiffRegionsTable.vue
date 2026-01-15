@@ -56,7 +56,15 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * DiffRegionsTable.vue - 差异区域表格视图
+ * 以数据表格的形式展示所有检测到的差异，包含详细的坐标、尺寸及像素级差异统计。
+ */
+
+/**
+ * 组件属性定义
+ * @property {Array} regions - 差异区域对象数组
+ */
 defineProps({
   regions: {
     type: Array,
@@ -64,8 +72,17 @@ defineProps({
   }
 })
 
+/**
+ * 组件事件定义
+ * @event locate - 当用户点击“定位”按钮时触发
+ */
 defineEmits(['locate'])
 
+/**
+ * 获取优先级文案
+ * @param {string} priority - 优先级枚举值
+ * @returns {string} 中文文案
+ */
 const getPriorityLabel = (priority) => {
   const labels = {
     critical: '关键',
@@ -76,10 +93,15 @@ const getPriorityLabel = (priority) => {
   return labels[priority] || priority
 }
 
+/**
+ * 根据分数获取进度条颜色
+ * @param {number} score - 权重分数 (0-100)
+ * @returns {string} CSS 颜色值
+ */
 const getScoreColor = (score) => {
-  if (score < 60) return '#DC2626'
-  if (score < 85) return '#EA580C'
-  return '#16A34A'
+  if (score < 60) return '#DC2626' // 红色 (高风险)
+  if (score < 85) return '#EA580C' // 橙色 (中等风险)
+  return '#16A34A' // 绿色 (低风险)
 }
 </script>
 

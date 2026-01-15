@@ -55,9 +55,20 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * SideBySideComparison.vue - 并排对比组件
+ * 核心功能：将设计稿与实际页面图片左右并列展示，方便用户肉眼观察排版差异。
+ * 支持同步缩放以查看微观像素细节。
+ */
 import { ref } from 'vue'
 
+/**
+ * 组件属性定义
+ * @property {string} designImage - 设计稿图片的 URL
+ * @property {string} actualImage - 实际抓取的页面截图 URL
+ * @property {number} diffPixels - 两个图片之间的像素差异点总数
+ * @property {number} similarity - 整体视觉相似度百分比
+ */
 defineProps({
   designImage: String,
   actualImage: String,
@@ -65,20 +76,24 @@ defineProps({
   similarity: Number
 })
 
+/** 响应式状态：当前的缩放级别，默认为 1（原始尺寸比例） */
 const zoomLevel = ref(1)
 
+/** 逻辑处理器：画面放大，最高限额 3 倍 */
 const handleZoomIn = () => {
   if (zoomLevel.value < 3) {
     zoomLevel.value += 0.25
   }
 }
 
+/** 逻辑处理器：画面缩小，最低限额 0.5 倍 */
 const handleZoomOut = () => {
   if (zoomLevel.value > 0.5) {
     zoomLevel.value -= 0.25
   }
 }
 
+/** 逻辑处理器：快捷重置缩放比例 */
 const handleResetZoom = () => {
   zoomLevel.value = 1
 }

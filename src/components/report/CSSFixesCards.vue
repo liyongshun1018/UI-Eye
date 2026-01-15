@@ -47,7 +47,15 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * CSSFixesCards.vue - CSS 修复建议卡片视图
+ * 以卡片形式展示每条修复建议，突出显示样式变更（Diff）效果。
+ */
+
+/**
+ * 组件属性定义
+ * @property {Array} fixes - 修复建议数组
+ */
 defineProps({
   fixes: {
     type: Array,
@@ -55,8 +63,17 @@ defineProps({
   }
 })
 
+/**
+ * 组件事件定义
+ * @event copy - 点击复制按钮时触发
+ */
 defineEmits(['copy'])
 
+/**
+ * 获取优先级文案
+ * @param {string} priority - 优先级枚举值
+ * @returns {string} 中文文案
+ */
 const getPriorityLabel = (priority) => {
   const labels = {
     critical: '关键',
@@ -67,6 +84,11 @@ const getPriorityLabel = (priority) => {
   return labels[priority] || priority
 }
 
+/**
+ * 获取类型文案
+ * @param {string} type - 修复类型枚举值
+ * @returns {string} 中文文案
+ */
 const getTypeLabel = (type) => {
   const labels = {
     layout: '布局',
@@ -78,7 +100,15 @@ const getTypeLabel = (type) => {
   return labels[type] || type
 }
 
+/**
+ * 计算样式的差异属性
+ * 通过解析当前样式和建议样式的字符串，找出被修改、新增或保持不变的属性。
+ * @param {string} current - 当前样式字符串
+ * @param {string} suggested - 建议样式字符串
+ * @returns {Array} 差异对象数组
+ */
 const getDiffProperties = (current, suggested) => {
+  /** 解析样式字符串为键值对象 */
   const parseStr = (str) => {
     const props = {}
     str.split(';').forEach(item => {

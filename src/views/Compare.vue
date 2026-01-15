@@ -218,14 +218,25 @@
 </template>
 
 <script setup>
+/**
+ * Compare.vue - 开始对比配置页面
+ * 用户在此输入 H5 地址、上传设计稿、配置 AI 模型参数并启动对比任务。
+ */
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+// 从常量配置文件导入 UI 枚举和预设
 import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@/config/constants'
+// 导入对比相关的 API 服务
 import { uploadDesign, fetchLanhuDesign, startCompare } from '@/services/compare'
 
+/** 路由实例，用于任务启动后的跳转 */
 const router = useRouter()
 
-// 对比模式
+/** 
+ * 对比模式配置定义
+ * UPLOAD: 本地图片上传模式
+ * LANHU: 远程 URL/蓝湖图片模式
+ */
 const modes = [
   { ...COMPARE_MODES.UPLOAD, icon: '📤' },
   { 
@@ -236,21 +247,25 @@ const modes = [
   }
 ]
 
-// AI 模型
+/** 获取配置的所有可用 AI 分析模型 */
 const availableAiModels = Object.values(AI_MODELS)
 
-// 视口预设
+/** 获取所有预定义的视口（手机型号）尺寸 */
 const viewportPresets = VIEWPORT_PRESETS
 
-/** @type {import('../types').CompareConfig} */
+/** 
+ * 核心业务配置对象（表单绑定）
+ * 使用 JSDoc 定义类型以支持 IDE 高级分析
+ * @type {import('../types').CompareConfig} 
+ */
 const config = reactive({
-  url: '',
-  mode: 'upload',
-  designSource: '',
-  aiModel: 'siliconflow',
-  engine: 'resemble', // 默认引擎改为 Resemble
-  ignoreAntialiasing: true, // 默认忽略抗锯齿
-  viewport: {
+  url: '',               // 待测试的 H5 页面在线地址
+  mode: 'upload',        // 设计稿来源模式：'upload' | 'lanhu'
+  designSource: '',      // 设计稿绝对路径或远程 URL
+  aiModel: 'siliconflow', // 默认使用的 AI 视觉分析模型
+  engine: 'resemble',    // 核心对比引擎：'pixelmatch' (快) | 'resemble' (精)
+  ignoreAntialiasing: true, // 对比时是否忽略字体/边缘抗锯齿引发的误报
+  viewport: {            // 页面渲染的容器尺寸
     width: 375,
     height: 667
   }
@@ -273,27 +288,29 @@ const engines = [
 ]
 
 // 文件上传相关
-const fileInput = ref()
-const designFile = ref()
-const designPreview = ref('')
-const isDragging = ref(false)
-const isSubmitting = ref(false)
-const selectedPreset = ref('iPhone SE')
+const fileInput = ref()        // input[type=file] 的 DOM 引用
+const designFile = ref()       // 当前选中的 File 对象
+const designPreview = ref('')  // 设计稿的 base64 预览图
+const isDragging = ref(false)  // 是否正在执行文件拖拽动作
+const isSubmitting = ref(false) // 表单是否处于提交锁死状态
+const selectedPreset = ref('iPhone SE') // 选中的视口预设名称
 
-// 表单验证
+/** 
+ * 计算属性：判断表单是否满足提交的最小条件 
+ */
 const canSubmit = computed(() => {
-  if (!config.url) return false
-  if (config.mode === 'upload' && !designFile.value) return false
-  if (config.mode === 'lanhu' && !config.designSource) return false
+  if (!config.url) return false // 必须填写页面 URL
+  if (config.mode === 'upload' && !designFile.value) return false // 上传模式必选文件
+  if (config.mode === 'lanhu' && !config.designSource) return false // 链接模式必填地址
   return true
 })
 
-// 触发文件选择
+/** 逻辑处理器：手动触发隐藏的文件选择框 */
 const triggerFileInput = () => {
   fileInput.value?.click()
 }
 
-// 处理文件选择
+/** 逻辑处理器：用户从标准文件框中选择文件后的处理 */
 const handleFileSelect = (e) => {
   const target = e.target
   const file = target.files?.[0]
@@ -302,7 +319,7 @@ const handleFileSelect = (e) => {
   }
 }
 
-// 处理拖拽上传
+/** 逻辑处理器：用户将文件拖拽并施放到上传区后的处理 */
 const handleDrop = (e) => {
   isDragging.value = false
   const file = e.dataTransfer?.files[0]
@@ -311,17 +328,21 @@ const handleDrop = (e) => {
   }
 }
 
-// 设置设计稿文件
+/**
+ * 内部方法：读取并设置设计稿预览
+ * @param {File} file - 待处理的图片文件对象
+ */
 const setDesignFile = (file) => {
   designFile.value = file
   const reader = new FileReader()
   reader.onload = (e) => {
+    // 将文件转换为 base64 以便即时预览
     designPreview.value = e.target?.result
   }
   reader.readAsDataURL(file)
 }
 
-// 清除文件
+/** 逻辑处理器：重置已选中的设计稿文件 */
 const clearFile = () => {
   designFile.value = undefined
   designPreview.value = ''
@@ -330,7 +351,7 @@ const clearFile = () => {
   }
 }
 
-// 处理视口预设变化
+/** 逻辑处理器：当用户从预设列表中选择设备时触发尺寸同步 */
 const handlePresetChange = () => {
   const preset = viewportPresets.find(p => p.name === selectedPreset.value)
   if (preset && preset.width > 0) {
@@ -339,43 +360,49 @@ const handlePresetChange = () => {
   }
 }
 
-// 提交表单
+/**
+ * 核心业务流程：提交对比表单
+ * 包含：设计稿预处理 -> 启动对比引擎 -> 结果页面导向
+ */
 const handleSubmit = async () => {
+  // 安全检查：防止重复提交或无效提交
   if (!canSubmit.value || isSubmitting.value) return
 
   isSubmitting.value = true
 
   try {
-    // 1. 上传设计稿或获取蓝湖设计稿
+    // 第一步：处理设计稿来源。根据模式选择上传到服务器或通过蓝湖 API 解析 URL
     if (config.mode === 'upload' && designFile.value) {
       const uploadRes = await uploadDesign(designFile.value)
       if (!uploadRes.success || !uploadRes.data) {
         throw new Error(uploadRes.message || '设计稿上传失败，请重试')
       }
+      // 将上传成功后的远程全路径回填到配置中
       config.designSource = uploadRes.data.url
     } else if (config.mode === 'lanhu') {
       const lanhuRes = await fetchLanhuDesign(config.designSource)
       if (!lanhuRes.success || !lanhuRes.data) {
         throw new Error(lanhuRes.message || '获取蓝湖设计稿失败，请检查链接是否正确')
       }
+      // 蓝湖模式下，系统会自动识别图片资源的真实 CDN 地址
       config.designSource = lanhuRes.data.imageUrl
     }
 
-    // 2. 开始对比
+    // 第二步：正式启动后端的截图与对比分析引擎（包含 AI 调用）
     const compareRes = await startCompare(config)
     if (!compareRes.success || !compareRes.data) {
       throw new Error(compareRes.message || '启动对比任务失败，请重试')
     }
     
-    // 跳转到报告页面
+    // 第三步：成功启动后，重定向到实时生成的报告页面
     router.push(`/report/${compareRes.data.reportId}`)
   } catch (error) {
-    console.error('对比失败:', error)
-    
-    // 显示详细错误信息
+    // 统一的异常捕获与友好 UI 提示
+    console.error('对比链路异常:', error)
     const errorMessage = error.message || '对比失败，请重试'
-    alert(`❌ ${errorMessage}\n\n建议：\n1. 检查网络连接\n2. 确认页面 URL 可访问\n3. 验证设计稿格式正确`)
+    alert(`❌ ${errorMessage}\n\n解决建议：\n1. 检查页面 URL 是否外网可访问\n2. 确认远程图片地址是否已失效\n3. 检查控制台网络连接状态`)
   } finally {
+    // 无论是成功还是失败，最终都要解锁提交按钮
     isSubmitting.value = false
   }
 }

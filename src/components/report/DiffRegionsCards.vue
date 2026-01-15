@@ -163,9 +163,17 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * DiffRegionsCards.vue - 差异区域卡片视图
+ * 按优先级（关键、重要、次要、低）分组展示所有检测到的差异区域。
+ */
 import { computed } from 'vue'
 
+/**
+ * 组件属性定义
+ * @property {Array} regions - 所有的差异区域对象数组
+ * @property {string} activeFilter - 当前激活的优先级过滤器 ('all', 'critical', 'high')
+ */
 const props = defineProps({
   regions: {
     type: Array,
@@ -174,8 +182,13 @@ const props = defineProps({
   activeFilter: String
 })
 
+/**
+ * 组件事件定义
+ * @event locate - 当用户点击“定位到区域”按钮时触发
+ */
 defineEmits(['locate'])
 
+/** 关键问题列表：优先级为 critical 且符合当前过滤条件 */
 const criticalRegions = computed(() => {
   const regions = props.regions.filter(r => r.priority === 'critical')
   if (props.activeFilter === 'all' || props.activeFilter === 'critical') {
@@ -184,6 +197,7 @@ const criticalRegions = computed(() => {
   return []
 })
 
+/** 重要问题列表：优先级为 high 且符合当前过滤条件 */
 const highRegions = computed(() => {
   const regions = props.regions.filter(r => r.priority === 'high')
   if (props.activeFilter === 'all' || props.activeFilter === 'critical' || props.activeFilter === 'high') {
@@ -192,11 +206,13 @@ const highRegions = computed(() => {
   return []
 })
 
+/** 次要问题列表：仅在过滤条件为 'all' 时展示 */
 const mediumRegions = computed(() => {
   if (props.activeFilter !== 'all') return []
   return props.regions.filter(r => r.priority === 'medium')
 })
 
+/** 低优先级问题列表：仅在过滤条件为 'all' 时展示 */
 const lowRegions = computed(() => {
   if (props.activeFilter !== 'all') return []
   return props.regions.filter(r => r.priority === 'low')

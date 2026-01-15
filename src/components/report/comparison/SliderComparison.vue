@@ -62,57 +62,83 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * SliderComparison.vue - 拨杆对比组件
+ * 核心功能：通过拖动中间的竖向拨杆，动态裁剪上层设计稿图片，展示底层实际页面图片。
+ * 效果类似于“刮刮乐”，用户可以极度灵敏地感知页面线条的位移情况。
+ */
 import { ref, nextTick, onMounted } from 'vue'
 
+/**
+ * 组件属性定义
+ * @property {string} designImage - 设计稿图片的 URL
+ * @property {string} actualImage - 实际抓取的页面截图 URL
+ */
 defineProps({
   designImage: String,
   actualImage: String
 })
 
-const sliderPosition = ref(50)
-const isDragging = ref(false)
-const sliderViewport = ref(null)
-const sliderBase = ref(null)
-const sliderOverlay = ref(null)
+// 响应式状态
+const sliderPosition = ref(50)      // 拨杆位置百分比 (0-100)
+const isDragging = ref(false)       // 是否正在拖拽拨杆
+const sliderViewport = ref(null)    // 视口 DOM 容器引用
+const sliderBase = ref(null)        // 底层图片（实际页面）DOM 引用
+const sliderOverlay = ref(null)     // 顶层图片（设计稿）DOM 引用
+const zoomLevel = ref(1)            // 当前缩放倍率
 
+/** 
+ * 逻辑处理器：开始拖拽拨杆 
+ */
 const startSliderDrag = (e) => {
   isDragging.value = true
   updateSliderPosition(e)
   
+  // 监听全局鼠标移动和松开，确保拖拽流畅
   document.addEventListener('mousemove', onSliderDrag)
   document.addEventListener('mouseup', stopSliderDrag)
 }
 
+/** 
+ * 逻辑处理器：鼠标移动过程中的拨杆位移计算 
+ */
 const onSliderDrag = (e) => {
   if (!isDragging.value) return
   updateSliderPosition(e)
 }
 
+/** 
+ * 逻辑处理器：停止拖拽拨杆，解绑全局事件 
+ */
 const stopSliderDrag = () => {
   isDragging.value = false
   document.removeEventListener('mousemove', onSliderDrag)
   document.removeEventListener('mouseup', stopSliderDrag)
 }
 
-const zoomLevel = ref(1)
-
+/** 逻辑处理器：画面放大 */
 const handleZoomIn = () => {
   if (zoomLevel.value < 3) {
     zoomLevel.value += 0.25
   }
 }
 
+/** 逻辑处理器：画面缩小 */
 const handleZoomOut = () => {
   if (zoomLevel.value > 0.5) {
     zoomLevel.value -= 0.25
   }
 }
 
+/** 逻辑处理器：重置缩放 */
 const handleResetZoom = () => {
   zoomLevel.value = 1
 }
 
+/**
+ * 内部方法：计算拨杆应处的百分比位置
+ * @param {MouseEvent} e - 鼠标事件
+ */
 const updateSliderPosition = (e) => {
   const viewport = sliderViewport.value
   if (!viewport) return
@@ -120,10 +146,15 @@ const updateSliderPosition = (e) => {
   const rect = viewport.getBoundingClientRect()
   const x = e.clientX - rect.left
   const percentage = (x / rect.width) * 100
+  // 边界约束：确保拨杆不会滑出容器
   sliderPosition.value = Math.max(0, Math.min(100, percentage))
 }
 
-// 同步拨杆图片尺寸
+/**
+ * 同步逻辑：确保上层设计稿与底层实际图尺寸完全一致
+ * 由于图片加载是异步的，且响应式布局下 offsetWidth 可能变化，
+ * 需要轮询或在 load 事件中强制同步两个图片的宽高，否则 clip-path 会失效。
+ */
 const syncImages = () => {
   const base = sliderBase.value
   const overlay = sliderOverlay.value
@@ -135,6 +166,7 @@ const syncImages = () => {
       const baseWidth = base.offsetWidth
       const baseHeight = base.offsetHeight
       
+      // 强制上层设计稿跟随底层实际页面截图的大小
       overlay.style.width = `${baseWidth}px`
       overlay.style.height = `${baseHeight}px`
     } else {
@@ -145,6 +177,7 @@ const syncImages = () => {
   checkBothLoaded()
 }
 
+// 生命周期：挂载后启动尺寸同步
 onMounted(() => {
   nextTick(() => {
     setTimeout(() => {

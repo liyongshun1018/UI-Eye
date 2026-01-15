@@ -119,10 +119,17 @@
 </template>
 
 <script setup>
+/**
+ * Report.vue - 报告详情页面
+ * 负责展示 AI 对比的具体结果，包括相似度、差异区域定位、CSS 修复建议等。
+ * 支持多种对比视图切换。
+ */
 // @ts-nocheck
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { getReport } from '../services/compare'
+
+// 基础组件导入
 import ReportHeader from '../components/report/ReportHeader.vue'
 import ComparisonModeSelector from '../components/report/ComparisonModeSelector.vue'
 import SideBySideComparison from '../components/report/comparison/SideBySideComparison.vue'
@@ -132,40 +139,60 @@ import DiffHighlightComparison from '../components/report/comparison/DiffHighlig
 import DiffRegionsSection from '../components/report/DiffRegionsSection.vue'
 import CSSFixesSection from '../components/report/CSSFixesSection.vue'
 
+// 路由控制
 const route = useRoute()
 const reportId = route.params.id
 
-const isLoading = ref(true)
-const errorMessage = ref('')
-/** @type {import('vue').Ref<import('../types').CompareReport | undefined>} */
+// 页面基础响应式状态
+const isLoading = ref(true)      // 是否正在首次加载
+const errorMessage = ref('')     // 加载错误消息提示
+
+/** 
+ * 报告详情数据
+ * @type {import('vue').Ref<import('../types').CompareReport | undefined>} 
+ */
 const reportData = ref()
 
-/** @type {import('vue').Ref<'side-by-side' | 'slider' | 'overlay' | 'diff'>} */
+/** 
+ * 当前激活的对比模式
+ * @type {import('vue').Ref<'side-by-side' | 'slider' | 'overlay' | 'diff'>} 
+ */
 const comparisonMode = ref('side-by-side')
 
+/** 是否显示原始像素级差异图 */
 const showOriginalDiff = ref(false)
 
-/** @type {import('vue').Ref<import('../types').DiffRegion | null>} */
+/** 
+ * 当前被高亮定位的特定差异区域
+ * @type {import('vue').Ref<import('../types').DiffRegion | null>} 
+ */
 const selectedRegion = ref(null)
 
-// 模式定义
+/** 
+ * 对比模式配置项汇总
+ * 用于给模式切换选择器组件提供选项
+ */
 const comparisonModes = [
-  { label: '并排对比', value: 'side-by-side', icon: '⚖️' },
+  { label: '并排对比', value: 'side-by-side', icon: '秤' },
   { label: '拨杆对比', value: 'slider', icon: '↔️' },
   { label: '重叠对比', value: 'overlay', icon: '🔄' },
   { label: '差异高亮', value: 'diff', icon: '🎯' }
 ]
 
-// 加载报告
+/**
+ * 核心方法：加载/刷新报告数据
+ * 如果报告处于 'processing' 状态，会启动定时轮询
+ */
 const loadReport = async () => {
   try {
     const res = await getReport(reportId)
     if (res.success && res.data) {
       reportData.value = res.data
       
-      // 如果还在处理中，3秒后自动刷新
+      // 智能化轮询策略：如果报告还在处理中，3秒后自动发起下次请求
       if (res.data.status === 'processing' && !errorMessage.value) {
         setTimeout(() => {
+          // 确保用户没有离开当前报告页面
           if (reportData.value?.id === reportId) {
             loadReport()
           }
@@ -181,25 +208,33 @@ const loadReport = async () => {
   }
 }
 
+// 生命周期钩子：挂载后立即请求数据
 onMounted(() => {
   loadReport()
 })
 
-// 刷新报告
+/**
+ * 手动刷新报告状态
+ * 适用于系统检测到处理中或用户想获取最新 AI 结果时
+ */
 const refreshReport = () => {
   isLoading.value = true
   loadReport()
 }
 
-// 定位到区域
+/**
+ * 业务逻辑：定位到特定的差异区域
+ * 当用户在“差异列表”中点击定位按钮时触发
+ * @param {import('../types').DiffRegion} region - 选中的目标区域对象
+ */
 const locateRegion = (region) => {
-  // 切换到差异高亮模式
+  // 1. 强制切换到“差异高亮”视窗模式，以支持区域绘制
   comparisonMode.value = 'diff'
   
-  // 记录选中的区域
+  // 2. 注入选中的区域数据，供子组件 DiffHighlightComparison 渲染红框
   selectedRegion.value = region
 
-  // 滚动到图片对比区域
+  // 3. 视觉联动：通过 DOM API 平滑滚动到对比图片区域，确聚焦重点
   nextTick(() => {
     const comparisonSection = document.querySelector('.image-comparison')
     if (comparisonSection) {
@@ -208,7 +243,10 @@ const locateRegion = (region) => {
   })
 }
 
-// 监听模式切换，如果是手动切换模式，清除选中的高亮区域
+/**
+ * 联动逻辑监听：
+ * 开启监听模式切换，只要用户切离了“差异高亮”模式，就重置选中的区域状态数据
+ */
 watch(comparisonMode, (newMode) => {
   if (newMode !== 'diff') {
     selectedRegion.value = null

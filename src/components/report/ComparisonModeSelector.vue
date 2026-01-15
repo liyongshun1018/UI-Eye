@@ -16,13 +16,27 @@
 </template>
 
 <script setup>
-// @ts-nocheck
+/**
+ * ComparisonModeSelector.vue - 对比模式选择器组件
+ * 提供“高亮对比”、“并排对比”、“滑块对比”和“叠加对比”四个维度切换功能。
+ */
+
+/**
+ * 组件属性定义
+ * @property {string} modelValue - 当前激活的模式值 (v-model)
+ * @property {Array} modes - 可选模式列表，包含 value, label, icon
+ * @property {string} title - 区块标题
+ */
 defineProps({
   modelValue: String,
   modes: Array,
   title: String
 })
 
+/**
+ * 组件事件定义
+ * @event update:modelValue - 当用户点击切换按钮时触发，用于双向绑定
+ */
 defineEmits(['update:modelValue'])
 </script>
 
