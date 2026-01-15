@@ -185,8 +185,8 @@
             </label>
           </div>
 
-          <!-- Resemble 高级选项 -->
-          <div v-if="config.engine === 'resemble'" class="advanced-options">
+          <!-- Resemble & ODiff 高级选项 -->
+          <div v-if="config.engine === 'resemble' || config.engine === 'odiff'" class="advanced-options">
             <h3 class="options-title">高级选项</h3>
             <label class="checkbox-option">
               <input
@@ -195,6 +195,14 @@
               />
               <span>忽略抗锯齿差异</span>
               <span class="option-hint">（推荐）减少字体渲染等导致的误报</span>
+            </label>
+            <label class="checkbox-option mt-2">
+              <input
+                v-model="config.enableSmartAlignment"
+                type="checkbox"
+              />
+              <span>开启智能吸附 (Smart Alignment)</span>
+              <span class="option-hint">自动对齐 1-2 像素的微小位移</span>
             </label>
           </div>
         </div>
@@ -265,6 +273,7 @@ const config = reactive({
   aiModel: 'siliconflow', // 默认使用的 AI 视觉分析模型
   engine: 'resemble',    // 核心对比引擎：'pixelmatch' (快) | 'resemble' (精)
   ignoreAntialiasing: true, // 对比时是否忽略字体/边缘抗锯齿引发的误报
+  enableSmartAlignment: true, // 是否开启智能吸附对齐
   viewport: {            // 页面渲染的容器尺寸
     width: 375,
     height: 667
@@ -284,6 +293,12 @@ const engines = [
     name: 'Resemble.js',
     badge: '高质量',
     description: '智能对比引擎，自动忽略抗锯齿，减少误报'
+  },
+  {
+    value: 'odiff',
+    name: 'ODiff',
+    badge: '极速',
+    description: '自称极速的像素对比引擎，专为高性能 UI 测试打造'
   }
 ]
 
@@ -707,6 +722,11 @@ const handleSubmit = async () => {
   color: var(--accent-primary);
 }
 
+.badge-odiff {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
 .engine-desc {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
@@ -744,6 +764,10 @@ const handleSubmit = async () => {
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   margin-left: auto;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
 }
 
 /* 响应式 */

@@ -33,24 +33,27 @@
       </div>
     </div>
     
-    <div v-if="fixes.length === 0" class="no-fixes">
-      <div class="icon">✅</div>
-      <p>太棒了！未发现明显差异</p>
+    <!-- 无数据状态 -->
+    <div v-if="fixes.length === 0" class="empty-state card glass">
+      <div class="empty-icon">✅</div>
+      <p>暂无待处理的样式修复建议</p>
     </div>
     
     <template v-else>
-      <!-- 卡片视图 -->
+      <!-- 视图 1：卡片视窗 -->
       <CSSFixesCards
-        v-if="viewMode === 'card'"
+        v-if="viewMode === 'cards'"
         :fixes="fixes"
         @copy="copyCode"
+        @preview="$emit('preview', $event)"
       />
       
-      <!-- 表格视图 -->
+      <!-- 视图 2：表格视窗 -->
       <CSSFixesTable
         v-else
         :fixes="fixes"
         @copy="copyCode"
+        @preview="$emit('preview', $event)"
       />
     </template>
   </div>
@@ -58,8 +61,8 @@
 
 <script setup>
 /**
- * CSSFixesSection.vue - CSS 修复建议区块
- * 汇总展示 AI 发现的所有样式差异及对应的 CSS 修复代码，支持卡片和表格两种视图。
+ * CSSFixesSection.vue - CSS 修复建议容器
+ * 统一管理卡片与表格两种展示模式的切换与数据分发。
  */
 import { ref } from 'vue'
 import CSSFixesCards from './CSSFixesCards.vue'
@@ -72,7 +75,7 @@ import CSSFixesTable from './CSSFixesTable.vue'
 const props = defineProps({
   fixes: {
     type: Array,
-    required: true
+    default: () => []
   }
 })
 

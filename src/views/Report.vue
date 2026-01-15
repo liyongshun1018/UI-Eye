@@ -20,7 +20,7 @@
         <!-- 处理中状态 -->
         <div v-if="reportData.status === 'processing'" class="processing-state card glass">
           <div class="loading-content">
-            <div class="spinner spin">⚙️</div>
+            <div class="spinner-ring"></div>
             <h2>正在分析中...</h2>
             <p>预计需要 15-30 秒，请稍候</p>
             <button class="btn btn-secondary" @click="refreshReport">刷新状态</button>
@@ -32,8 +32,10 @@
           <div class="error-icon">❌</div>
           <h2>分析失败</h2>
           <p>{{ reportData.error || '可能是由于截图超时或 AI 响应异常导致' }}</p>
-          <router-link to="/compare" class="btn btn-primary">返回重试</router-link>
-          <button class="btn btn-secondary mt-2" @click="refreshReport">重新加载</button>
+          <div class="error-actions">
+            <router-link to="/compare" class="btn btn-primary">返回重试</router-link>
+            <button class="btn btn-secondary" @click="refreshReport">重新加载</button>
+          </div>
         </div>
 
         <!-- 报告完成 -->
@@ -83,8 +85,10 @@
                 :diff-image="reportData.diffImage?.annotatedUrl || reportData.images.diff"
                 :diff-pixels="reportData.diffPixels"
                 :similarity="reportData.similarity"
+                :regions="reportData.diffRegions"
                 :highlight-region="selectedRegion"
                 @clear="selectedRegion = null"
+                @locate="locateRegion"
               />
               
               <!-- 原始差异图（可选查看） -->
@@ -108,11 +112,19 @@
           />
 
           <!-- CSS 修复建议 -->
-          <CSSFixesSection
-            v-if="reportData.fixes && reportData.fixes.length > 0"
-            :fixes="reportData.fixes"
-          />
-        </template>
+           <CSSFixesSection
+             v-if="reportData.fixes && reportData.fixes.length > 0"
+             :fixes="reportData.fixes"
+             @preview="openPreview"
+           />
+ 
+           <!-- CSS 预览弹窗 -->
+           <CSSPreviewModal
+             v-model:show="showPreviewModal"
+             :url="previewUrl"
+             :css="previewCss"
+           />
+         </template>
       </div>
     </div>
   </div>
@@ -138,6 +150,7 @@ import OverlayComparison from '../components/report/comparison/OverlayComparison
 import DiffHighlightComparison from '../components/report/comparison/DiffHighlightComparison.vue'
 import DiffRegionsSection from '../components/report/DiffRegionsSection.vue'
 import CSSFixesSection from '../components/report/CSSFixesSection.vue'
+import CSSPreviewModal from '../components/report/CSSPreviewModal.vue'
 
 // 路由控制
 const route = useRoute()
@@ -167,6 +180,11 @@ const showOriginalDiff = ref(false)
  * @type {import('vue').Ref<import('../types').DiffRegion | null>} 
  */
 const selectedRegion = ref(null)
+ 
+ // CSS 预览弹窗状态
+ const showPreviewModal = ref(false)
+ const previewUrl = ref('')
+ const previewCss = ref('')
 
 /** 
  * 对比模式配置项汇总
@@ -244,14 +262,24 @@ const locateRegion = (region) => {
 }
 
 /**
- * 联动逻辑监听：
- * 开启监听模式切换，只要用户切离了“差异高亮”模式，就重置选中的区域状态数据
- */
-watch(comparisonMode, (newMode) => {
-  if (newMode !== 'diff') {
-    selectedRegion.value = null
-  }
-})
+  * 业务逻辑：打开 CSS 效果预览弹窗
+  * @param {Object} fix - 包含 suggestedCss 的修复建议对象
+  */
+ const openPreview = (fix) => {
+   previewUrl.value = reportData.value?.config?.url || ''
+   previewCss.value = fix.suggestedCss || ''
+   showPreviewModal.value = true
+ }
+ 
+ /**
+  * 联动逻辑监听：
+  * 开启监听模式切换，只要用户切离了“差异高亮”模式，就重置选中的区域状态数据
+  */
+ watch(comparisonMode, (newMode) => {
+   if (newMode !== 'diff') {
+     selectedRegion.value = null
+   }
+ })
 </script>
 
 <style scoped>
@@ -277,9 +305,25 @@ watch(comparisonMode, (newMode) => {
   text-align: center;
 }
 
+.error-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .spinner {
   font-size: 48px;
   margin-bottom: 24px;
+}
+
+.spinner-ring {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 24px;
+  border: 4px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 .spin {

@@ -36,12 +36,18 @@
             </div>
             <code>}</code>
           </div>
-          <button class="btn-copy" @click="$emit('copy', fix.suggestedCSS)">
-            复制
-          </button>
+          <!-- Removed old copy button -->
         </div>
       </div>
       <p v-if="fix.impact" class="fix-impact">{{ fix.impact }}</p>
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" @click="$emit('preview', fix)">
+          <span class="icon">👁️</span> 效果预览
+        </button>
+        <button class="btn btn-secondary btn-sm" @click="$emit('copy', fix.suggestedCSS)">
+          <span class="icon">📋</span> 复制代码
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -66,13 +72,12 @@ defineProps({
 /**
  * 组件事件定义
  * @event copy - 点击复制按钮时触发
+ * @event preview - 点击预览按钮时触发
  */
-defineEmits(['copy'])
+defineEmits(['copy', 'preview'])
 
 /**
  * 获取优先级文案
- * @param {string} priority - 优先级枚举值
- * @returns {string} 中文文案
  */
 const getPriorityLabel = (priority) => {
   const labels = {

@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import axios from 'axios'
 import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -70,6 +71,69 @@ const upload = multer({
 // 健康检查
 app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Server is running' })
+})
+
+// 新增：HTML 预览代理接口 (支持 CSS 注入)
+app.get('/api/proxy-preview', async (req, res) => {
+    console.log('[DEBUG] 命中预览代理接口')
+    try {
+        const { url, css } = req.query
+
+        if (!url) {
+            return res.status(400).send('Missing target URL')
+        }
+
+        console.log(`[预览代理] 正在请求: ${url}`)
+
+        const response = await axios.get(url, {
+            responseType: 'text',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1'
+            }
+        })
+
+        let html = response.data
+
+        // 1. 注入 <base> 标签，确保页面内的相对资源（JS/CSS/Image）能正确加载
+        const urlParsed = new URL(url)
+        const baseUrl = `${urlParsed.origin}${urlParsed.pathname.endsWith('/') ? urlParsed.pathname : path.dirname(urlParsed.pathname)}/`
+        const baseTag = `<base href="${baseUrl}">`
+
+        if (html.includes('<head>')) {
+            html = html.replace('<head>', `<head>\n    ${baseTag}`)
+        } else {
+            html = `<head>${baseTag}</head>${html}`
+        }
+
+        // 2. 注入修复后的 CSS 样式
+        if (css) {
+            const styleTag = `\n    <style id="ui-eye-injected-fix">
+      /* UI-Eye 自动注入的修复样式 */
+      ${css}
+      
+      /* 辅助样式：高亮被修改的元素（可选） */
+      [data-ui-eye-highlight] { outline: 2px solid #6366f1 !important; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important; }
+    </style>\n`
+            html = html.replace('</head>', `${styleTag}</head>`)
+        }
+
+        // 3. 禁用页面内的所有链接跳转，防止用户跑偏
+        html = html.replace(/<a /g, '<a onclick="return false;" style="cursor: default;" ')
+
+        // 4. 移除阻止 iframe 嵌套的安全响应头
+        res.removeHeader('X-Frame-Options')
+        res.removeHeader('Content-Security-Policy')
+        res.removeHeader('X-Content-Type-Options')
+
+        // 5. 设置允许 iframe 嵌套的响应头
+        res.set('Content-Type', 'text/html; charset=utf-8')
+        res.set('X-Frame-Options', 'ALLOWALL')
+
+        res.send(html)
+    } catch (error) {
+        console.error('[预览代理] 失败:', error.message)
+        res.status(500).send(`无法加载预览页面: ${error.message}`)
+    }
 })
 
 // 上传设计稿

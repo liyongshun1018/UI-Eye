@@ -43,10 +43,23 @@
             </div>
           </td>
           <td class="col-action">
-            <button class="btn-copy-sm" @click="$emit('copy', fix.suggestedCSS)">
-              复制
-            </button>
-          </td>
+            <div class="action-buttons">
+               <button 
+                 class="btn-icon btn-primary" 
+                 @click="$emit('preview', fix)"
+                 title="效果预览"
+               >
+                 👁️
+               </button>
+               <button 
+                 class="btn-icon btn-secondary" 
+                 @click="$emit('copy', fix.suggestedCSS)"
+                 title="复制代码"
+               >
+                 📋
+               </button>
+             </div>
+           </td>
         </tr>
       </tbody>
     </table>
@@ -73,13 +86,12 @@ defineProps({
 /**
  * 组件事件定义
  * @event copy - 点击复制按钮时触发
+ * @event preview - 点击预览按钮时触发
  */
-defineEmits(['copy'])
+defineEmits(['copy', 'preview'])
 
 /**
  * 获取优先级文案
- * @param {string} priority - 优先级枚举值
- * @returns {string} 中文文案
  */
 const getPriorityLabel = (priority) => {
   const labels = {
@@ -203,7 +215,55 @@ const getDiffProperties = (current, suggested) => {
 }
 
 .col-action {
-  width: 80px;
+  width: 120px;
+  white-space: nowrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.action-buttons .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-icon.btn-primary:hover {
+  background: var(--accent-secondary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+}
+
+.btn-icon.btn-secondary {
+  background: #f1f5f9;
+  color: var(--text-secondary);
+}
+
+.btn-icon.btn-secondary:hover {
+  background: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .priority-badge {
