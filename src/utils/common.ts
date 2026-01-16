@@ -3,16 +3,15 @@
  * 提供防抖、节流、深拷贝等常用功能
  */
 
+type AnyFunction = (...args: any[]) => any
+
 /**
  * 防抖函数
- * @param {Function} fn - 要防抖的函数
- * @param {number} delay - 延迟时间（毫秒）
- * @returns {Function} 防抖后的函数
  */
-export const debounce = (fn, delay = 300) => {
-    let timer = null
+export const debounce = <T extends AnyFunction>(fn: T, delay: number = 300): ((...args: Parameters<T>) => void) => {
+    let timer: NodeJS.Timeout | null = null
 
-    return function (...args) {
+    return function (this: any, ...args: Parameters<T>) {
         if (timer) clearTimeout(timer)
 
         timer = setTimeout(() => {
@@ -24,14 +23,11 @@ export const debounce = (fn, delay = 300) => {
 
 /**
  * 节流函数
- * @param {Function} fn - 要节流的函数
- * @param {number} delay - 延迟时间（毫秒）
- * @returns {Function} 节流后的函数
  */
-export const throttle = (fn, delay = 300) => {
+export const throttle = <T extends AnyFunction>(fn: T, delay: number = 300): ((...args: Parameters<T>) => void) => {
     let lastTime = 0
 
-    return function (...args) {
+    return function (this: any, ...args: Parameters<T>) {
         const now = Date.now()
 
         if (now - lastTime >= delay) {
@@ -43,15 +39,13 @@ export const throttle = (fn, delay = 300) => {
 
 /**
  * 深拷贝
- * @param {any} obj - 要拷贝的对象
- * @returns {any} 拷贝后的对象
  */
-export const deepClone = (obj) => {
+export const deepClone = <T>(obj: T): T => {
     if (obj === null || typeof obj !== 'object') return obj
-    if (obj instanceof Date) return new Date(obj)
-    if (obj instanceof Array) return obj.map(item => deepClone(item))
+    if (obj instanceof Date) return new Date(obj) as any
+    if (obj instanceof Array) return obj.map(item => deepClone(item)) as any
 
-    const clonedObj = {}
+    const clonedObj: any = {}
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
             clonedObj[key] = deepClone(obj[key])
@@ -63,19 +57,16 @@ export const deepClone = (obj) => {
 
 /**
  * 对象合并（深度合并）
- * @param {Object} target - 目标对象
- * @param {Object} source - 源对象
- * @returns {Object} 合并后的对象
  */
-export const deepMerge = (target, source) => {
+export const deepMerge = <T extends Record<string, any>>(target: T, source: Partial<T>): T => {
     const result = { ...target }
 
     for (const key in source) {
         if (source.hasOwnProperty(key)) {
             if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-                result[key] = deepMerge(result[key] || {}, source[key])
+                result[key] = deepMerge(result[key] || {} as any, source[key] as any)
             } else {
-                result[key] = source[key]
+                result[key] = source[key] as any
             }
         }
     }
@@ -85,30 +76,22 @@ export const deepMerge = (target, source) => {
 
 /**
  * 生成唯一 ID
- * @param {string} prefix - 前缀（可选）
- * @returns {string} 唯一 ID
  */
-export const generateId = (prefix = 'id') => {
+export const generateId = (prefix: string = 'id'): string => {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
 /**
  * 延迟函数
- * @param {number} ms - 延迟时间（毫秒）
- * @returns {Promise} Promise 对象
  */
-export const delay = (ms) => {
+export const delay = (ms: number): Promise<void> => {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 /**
  * 重试函数
- * @param {Function} fn - 要重试的函数
- * @param {number} retries - 重试次数
- * @param {number} delay - 重试延迟（毫秒）
- * @returns {Promise} Promise 对象
  */
-export const retry = async (fn, retries = 3, delayMs = 1000) => {
+export const retry = async <T>(fn: () => Promise<T>, retries: number = 3, delayMs: number = 1000): Promise<T> => {
     try {
         return await fn()
     } catch (error) {
@@ -121,11 +104,8 @@ export const retry = async (fn, retries = 3, delayMs = 1000) => {
 
 /**
  * 数组去重
- * @param {Array} arr - 数组
- * @param {string} key - 对象数组的唯一键（可选）
- * @returns {Array} 去重后的数组
  */
-export const unique = (arr, key) => {
+export const unique = <T>(arr: T[], key?: keyof T): T[] => {
     if (!Array.isArray(arr)) return []
 
     if (key) {
@@ -143,27 +123,22 @@ export const unique = (arr, key) => {
 
 /**
  * 数组分组
- * @param {Array} arr - 数组
- * @param {Function|string} fn - 分组函数或属性名
- * @returns {Object} 分组后的对象
  */
-export const groupBy = (arr, fn) => {
+export const groupBy = <T>(arr: T[], fn: ((item: T) => string) | keyof T): Record<string, T[]> => {
     if (!Array.isArray(arr)) return {}
 
     return arr.reduce((groups, item) => {
-        const key = typeof fn === 'function' ? fn(item) : item[fn]
+        const key = typeof fn === 'function' ? fn(item) : String(item[fn])
         if (!groups[key]) groups[key] = []
         groups[key].push(item)
         return groups
-    }, {})
+    }, {} as Record<string, T[]>)
 }
 
 /**
  * 下载文件
- * @param {string} url - 文件 URL
- * @param {string} filename - 文件名
  */
-export const downloadFile = (url, filename) => {
+export const downloadFile = (url: string, filename: string): void => {
     const link = document.createElement('a')
     link.href = url
     link.download = filename
@@ -174,10 +149,8 @@ export const downloadFile = (url, filename) => {
 
 /**
  * 复制到剪贴板
- * @param {string} text - 要复制的文本
- * @returns {Promise<boolean>} 是否成功
  */
-export const copyToClipboard = async (text) => {
+export const copyToClipboard = async (text: string): Promise<boolean> => {
     try {
         await navigator.clipboard.writeText(text)
         return true

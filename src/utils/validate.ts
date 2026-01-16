@@ -5,10 +5,8 @@
 
 /**
  * 验证 URL 是否有效
- * @param {string} url - URL 字符串
- * @returns {boolean} 是否有效
  */
-export const isValidURL = (url) => {
+export const isValidURL = (url: string): boolean => {
     if (!url) return false
 
     try {
@@ -21,10 +19,8 @@ export const isValidURL = (url) => {
 
 /**
  * 验证邮箱是否有效
- * @param {string} email - 邮箱地址
- * @returns {boolean} 是否有效
  */
-export const isValidEmail = (email) => {
+export const isValidEmail = (email: string): boolean => {
     if (!email) return false
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -33,10 +29,8 @@ export const isValidEmail = (email) => {
 
 /**
  * 验证手机号是否有效（中国大陆）
- * @param {string} phone - 手机号
- * @returns {boolean} 是否有效
  */
-export const isValidPhone = (phone) => {
+export const isValidPhone = (phone: string): boolean => {
     if (!phone) return false
 
     const phoneRegex = /^1[3-9]\d{9}$/
@@ -45,10 +39,8 @@ export const isValidPhone = (phone) => {
 
 /**
  * 验证是否为空
- * @param {any} value - 值
- * @returns {boolean} 是否为空
  */
-export const isEmpty = (value) => {
+export const isEmpty = (value: any): boolean => {
     if (value === null || value === undefined) return true
     if (typeof value === 'string') return value.trim() === ''
     if (Array.isArray(value)) return value.length === 0
@@ -58,32 +50,22 @@ export const isEmpty = (value) => {
 
 /**
  * 验证是否为数字
- * @param {any} value - 值
- * @returns {boolean} 是否为数字
  */
-export const isNumber = (value) => {
+export const isNumber = (value: any): boolean => {
     return !isNaN(parseFloat(value)) && isFinite(value)
 }
 
 /**
  * 验证是否在范围内
- * @param {number} value - 值
- * @param {number} min - 最小值
- * @param {number} max - 最大值
- * @returns {boolean} 是否在范围内
  */
-export const isInRange = (value, min, max) => {
+export const isInRange = (value: number, min: number, max: number): boolean => {
     return value >= min && value <= max
 }
 
 /**
  * 验证字符串长度
- * @param {string} str - 字符串
- * @param {number} min - 最小长度
- * @param {number} max - 最大长度（可选）
- * @returns {boolean} 是否符合长度要求
  */
-export const isValidLength = (str, min, max = Infinity) => {
+export const isValidLength = (str: string, min: number, max: number = Infinity): boolean => {
     if (!str) return false
     const len = str.length
     return len >= min && len <= max
