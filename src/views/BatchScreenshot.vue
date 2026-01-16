@@ -1,7 +1,7 @@
 <template>
   <div class="batch-screenshot">
     <div class="page-header">
-      <h1>📸 创建批量截图任务</h1>
+      <h1>🎯 创建批量视觉对比任务</h1>
       <button class="btn-secondary" @click="goBack">返回列表</button>
     </div>
 
@@ -61,6 +61,16 @@
           <p class="field-hint">如果页面需要登录，系统会尝试加载该域名的已存 Cookie。</p>
         </div>
 
+        <!-- 设计稿上传 -->
+        <div class="form-section">
+          <DesignUpload v-model="designUpload" />
+        </div>
+
+        <!-- 对比配置 -->
+        <div class="form-section" v-if="designUpload.designSource">
+          <CompareConfig v-model="compareConfig" />
+        </div>
+
         <!-- 截图选项 -->
         <div class="options-group">
           <h3>截图配置</h3>
@@ -85,7 +95,7 @@
             取消
           </button>
           <button type="submit" class="btn-submit" :disabled="submitting || urlCount === 0">
-            {{ submitting ? '创建中...' : '创建并启动任务' }}
+            {{ submitting ? '创建中...' : (designUpload.designSource ? '创建并启动对比任务' : '创建并启动截图任务') }}
           </button>
         </div>
       </form>
@@ -98,6 +108,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import batchTaskService from '../services/batchTaskService'
 import { useDialog } from '../composables/useDialog'
+import DesignUpload from '../components/batch/DesignUpload.vue'
+import CompareConfig from '../components/batch/CompareConfig.vue'
+import { COMPARE_ENGINE, AI_MODEL } from '../constants'
 
 const { showAlert, showError } = useDialog()
 
@@ -114,6 +127,19 @@ const form = ref({
     fullPage: true,
     headless: true
   }
+})
+
+// 设计稿上传数据
+const designUpload = ref({
+  mode: 'single',
+  designSource: ''
+})
+
+// 对比配置数据
+const compareConfig = ref({
+  engine: COMPARE_ENGINE.RESEMBLE,
+  aiModel: AI_MODEL.SILICONFLOW,
+  ignoreAntialiasing: true
 })
 
 const fetchScripts = async () => {
@@ -151,6 +177,9 @@ const handleSubmit = async () => {
       urls: urls,
       domain: form.value.domain || null,
       script_id: form.value.scriptId,
+      designMode: designUpload.value.mode,
+      designSource: designUpload.value.designSource || null,
+      compareConfig: designUpload.value.designSource ? compareConfig.value : null,
       options: form.value.options
     }
     
@@ -198,6 +227,32 @@ const goBack = () => {
   font-size: 24px;
   font-weight: 700;
   color: #1f2937;
+}
+
+.task-form-container {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-section {
+  padding: 24px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .task-form-container {
