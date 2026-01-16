@@ -1,5 +1,6 @@
 import { getDatabase } from '../database.js';
 import BatchScreenshotService from './BatchScreenshotService.js';
+import BatchCompareService from './BatchCompareService.js';
 import PlaywrightAuthService from './PlaywrightAuthService.js';
 import wsServer from './WSServer.js';
 import ScriptService from './ScriptService.js';
@@ -13,6 +14,7 @@ class BatchTaskService {
         this.db = getDatabase();
         this.authService = new PlaywrightAuthService();
         this.batchScreenshotService = new BatchScreenshotService(this.authService);
+        this.batchCompareService = new BatchCompareService();
         this.scriptService = new ScriptService();
         this.runningTasks = new Map(); // 存储正在运行的任务
 
@@ -55,13 +57,16 @@ class BatchTaskService {
      * @param {string} name - 任务名称
      * @param {Array<string>} urls - URL 列表
      * @param {string|null} domain - 登录域名（可选）
-     * @param {Object} options - 截图选项
+     * @param {Object} options - 截图和对比选项
      * @returns {number} 任务 ID
      */
     createTask(name, urls, domain = null, options = {}) {
         const stmt = this.db.prepare(`
-      INSERT INTO batch_tasks (name, urls, domain, script_id, total, status)
-      VALUES (?, ?, ?, ?, ?, 'pending')
+      INSERT INTO batch_tasks (
+        name, urls, domain, script_id, total, status,
+        design_mode, design_source, compare_config
+      )
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
     `);
 
         const result = stmt.run(
@@ -69,11 +74,28 @@ class BatchTaskService {
             JSON.stringify(urls),
             domain,
             options.script_id || null,
-            urls.length
+            urls.length,
+            options.designMode || 'single',
+            options.designSource || null,
+            options.compareConfig ? JSON.stringify(options.compareConfig) : null
         );
 
-        console.log(`📋 创建批量任务: ${name} (ID: ${result.lastInsertRowid})`);
-        return result.lastInsertRowid;
+        const taskId = result.lastInsertRowid;
+
+        // 创建任务明细记录
+        if (urls && urls.length > 0) {
+            const itemStmt = this.db.prepare(`
+                INSERT INTO batch_task_items (task_id, url, design_source)
+                VALUES (?, ?, ?)
+            `);
+
+            for (const url of urls) {
+                itemStmt.run(taskId, url, null);
+            }
+        }
+
+        console.log(`📋 创建批量任务: ${name} (ID: ${taskId})`);
+        return taskId;
     }
 
     /**
@@ -137,30 +159,39 @@ class BatchTaskService {
                 }
             }
 
-            // 执行批量截图
-            const result = await this.batchScreenshotService.batchScreenshot(
+            // 步骤 1: 执行批量截图
+            console.log(`📸 开始批量截图: 任务 ${taskId}`);
+            const screenshotResult = await this.batchScreenshotService.batchScreenshot(
                 urls,
                 task.domain,
                 {
                     headless: true,
                     fullPage: true,
-                    scriptCode, // 传入脚本代码
+                    scriptCode,
                     onProgress: (current, total, currentUrl, lastResult) => {
-                        // 更新进度
+                        // 更新截图进度
                         this.updateTaskProgress(taskId, current, total);
 
+                        // 更新任务明细的截图路径
+                        if (lastResult && lastResult.success) {
+                            this.db.prepare(`
+                                UPDATE batch_task_items 
+                                SET screenshot_path = ?
+                                WHERE task_id = ? AND url = ?
+                            `).run(lastResult.path, taskId, currentUrl);
+                        }
+
                         const progressData = {
+                            phase: 'screenshot',
                             current,
                             total,
-                            progress: Math.round((current / total) * 100),
+                            progress: Math.round((current / total) * 50), // 截图占50%
                             currentUrl,
-                            lastResult // 包含最新的截图结果
+                            lastResult
                         };
 
-                        // 通过 WebSocket 广播进度
                         wsServer.broadcastTaskUpdate(taskId, 'task:progress', progressData);
 
-                        // 调用外部进度回调
                         if (onProgress) {
                             onProgress(taskId, progressData);
                         }
@@ -168,49 +199,82 @@ class BatchTaskService {
                 }
             );
 
+            console.log(`✅ 批量截图完成: 成功 ${screenshotResult.success}/${screenshotResult.total}`);
+
+            // 步骤 2: 执行批量对比（如果提供了设计稿）
+            let compareResult = null;
+            if (task.designSource) {
+                console.log(`🔍 开始批量对比: 任务 ${taskId}`);
+
+                compareResult = await this.batchCompareService.batchCompare(
+                    taskId,
+                    (progress) => {
+                        const progressData = {
+                            phase: 'compare',
+                            current: progress.current,
+                            total: progress.total,
+                            progress: 50 + Math.round((progress.current / progress.total) * 50), // 对比占50%
+                            currentUrl: progress.url,
+                            status: progress.status
+                        };
+
+                        wsServer.broadcastTaskUpdate(taskId, 'task:progress', progressData);
+
+                        if (onProgress) {
+                            onProgress(taskId, progressData);
+                        }
+                    }
+                );
+
+                console.log(`✅ 批量对比完成: 成功 ${compareResult.successCount}/${compareResult.total}`);
+            }
+
             const duration = (Date.now() - startTime) / 1000;
 
             // 更新任务结果
             const stmt = this.db.prepare(`
-        UPDATE batch_tasks 
-        SET status = 'completed',
-    success = ?,
-    failed = ?,
-    duration = ?,
-    results = ?,
-    completed_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `);
+                UPDATE batch_tasks 
+                SET status = 'completed',
+                    success = ?,
+                    failed = ?,
+                    duration = ?,
+                    results = ?,
+                    completed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `);
 
             stmt.run(
-                result.success,
-                result.failed,
+                screenshotResult.success,
+                screenshotResult.failed,
                 duration,
-                JSON.stringify(result.results),
+                JSON.stringify({
+                    screenshot: screenshotResult,
+                    compare: compareResult
+                }),
                 taskId
             );
 
-            console.log(`✅ 任务 ${taskId} 完成: 成功 ${result.success}/${result.total}`);
+            console.log(`✅ 任务 ${taskId} 完成: 成功 ${screenshotResult.success}/${screenshotResult.total}`);
 
             // 通过 WebSocket 广播完成状态
             wsServer.broadcastTaskUpdate(taskId, 'task:completed', {
                 taskId,
                 status: 'completed',
-                ...result
+                screenshot: screenshotResult,
+                compare: compareResult
             });
 
-            // 调用完成回调
             if (onProgress) {
                 onProgress(taskId, {
                     status: 'completed',
-                    ...result
+                    screenshot: screenshotResult,
+                    compare: compareResult
                 });
             }
         } catch (error) {
             console.error(`❌ 任务 ${taskId} 失败:`, error);
             this.updateTaskStatus(taskId, 'failed', error.message);
 
-            // 通过 WebSocket 广播失败状态
             wsServer.broadcastTaskUpdate(taskId, 'task:failed', {
                 taskId,
                 status: 'failed',
@@ -376,7 +440,12 @@ class BatchTaskService {
             completedAt: row.completed_at,
             results: row.results ? JSON.parse(row.results) : null,
             errorMessage: row.error_message,
-            script_id: row.script_id
+            script_id: row.script_id,
+            designMode: row.design_mode,
+            designSource: row.design_source,
+            compareConfig: row.compare_config ? JSON.parse(row.compare_config) : null,
+            avgSimilarity: row.avg_similarity,
+            totalDiffCount: row.total_diff_count
         };
     }
 }
