@@ -1,3 +1,27 @@
 {
-    "type": "module"
+    "name": "server",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "server": "node src/index.js"
+    },
+    "dependencies": {
+        "better-sqlite3": "^12.6.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.2.1",
+        "multer": "^2.0.2",
+        "odiff-bin": "^4.3.2",
+        "pixelmatch": "^7.1.0",
+        "pngjs": "^7.0.0",
+        "puppeteer": "^24.35.0",
+        "resemblejs": "^5.0.0",
+        "sharp": "^0.34.5",
+        "ws": "^8.19.0"
+    },
+    "devDependencies": {
+        "@types/node": "^25.0.8",
+        "playwright": "^1.57.0"
+    }
 }
