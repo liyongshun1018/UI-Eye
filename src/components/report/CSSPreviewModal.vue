@@ -90,7 +90,7 @@
  * 核心逻辑：通过后端代理加载目标网页，并实时注入 AI 建议的 CSS 修复代码。
  */
 import { ref, computed, watch } from 'vue'
-import { useDialog } from '@/composables/useDialog'
+import { useDialog } from '@/composables/useDialog.ts'
 
 const { showSuccess, showError } = useDialog()
 

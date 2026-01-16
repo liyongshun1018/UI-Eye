@@ -107,7 +107,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import batchTaskService from '../services/batchTaskService'
-import { useDialog } from '../composables/useDialog'
+import { useDialog } from '../composables/useDialog.ts'
 import DesignUpload from '../components/batch/DesignUpload.vue'
 import CompareConfig from '../components/batch/CompareConfig.vue'
 import { COMPARE_ENGINE, AI_MODEL } from '../constants'

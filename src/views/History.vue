@@ -118,7 +118,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getReportList } from '@/services/compare'
 import type { CompareReport } from '@/types'
-import { useDialog } from '@/composables/useDialog'
+import { useDialog } from '@/composables/useDialog.ts'
 import { formatDate } from '@/utils'
 
 const { showConfirm, showError } = useDialog()

@@ -68,7 +68,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import batchTaskService from '../services/batchTaskService'
-import { useDialog } from '../composables/useDialog'
+import { useDialog } from '../composables/useDialog.ts'
 import { formatDate } from '@/utils'
 
 const { showError } = useDialog()

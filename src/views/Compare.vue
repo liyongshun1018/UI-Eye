@@ -236,7 +236,7 @@ import { useRouter } from 'vue-router'
 import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@/config/constants'
 // 导入对比相关的 API 服务
 import { uploadDesign, fetchLanhuDesign, startCompare } from '@/services/compare'
-import { useDialog } from '@/composables/useDialog'
+import { useDialog } from '@/composables/useDialog.ts'
 
 const { showError } = useDialog()
 

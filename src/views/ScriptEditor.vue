@@ -157,7 +157,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import batchTaskService from '../services/batchTaskService'
 import CodeEditor from '../components/common/CodeEditor.vue'
-import { useDialog } from '../composables/useDialog'
+import { useDialog } from '../composables/useDialog.ts'
 
 const { showAlert, showConfirm, showSuccess, showError } = useDialog()
 
