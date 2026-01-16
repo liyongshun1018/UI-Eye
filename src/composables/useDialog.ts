@@ -1,9 +1,33 @@
 import { ref, reactive } from 'vue'
 
+// 对话框类型
+export type DialogType = 'alert' | 'confirm' | 'success' | 'error'
+
+// 对话框状态接口
+export interface DialogState {
+    visible: boolean
+    type: DialogType
+    title: string
+    message: string
+    confirmText: string
+    cancelText: string
+    onConfirm: (() => void) | null
+    onCancel: (() => void) | null
+}
+
+// 对话框选项接口
+export interface DialogOptions {
+    type: DialogType
+    title: string
+    message: string
+    confirmText?: string
+    cancelText?: string
+}
+
 // 全局对话框状态
-const dialogState = reactive({
+const dialogState = reactive<DialogState>({
     visible: false,
-    type: 'alert', // 'alert' | 'confirm' | 'success' | 'error'
+    type: 'alert',
     title: '',
     message: '',
     confirmText: '确定',
@@ -13,7 +37,7 @@ const dialogState = reactive({
 })
 
 // 重置状态
-const resetDialog = () => {
+const resetDialog = (): void => {
     dialogState.visible = false
     dialogState.type = 'alert'
     dialogState.title = ''
@@ -25,7 +49,7 @@ const resetDialog = () => {
 }
 
 // 显示对话框的通用方法
-const showDialog = (options) => {
+const showDialog = (options: Partial<DialogOptions>): Promise<boolean> => {
     return new Promise((resolve) => {
         Object.assign(dialogState, {
             visible: true,
@@ -45,10 +69,8 @@ const showDialog = (options) => {
 export function useDialog() {
     /**
      * 显示提示对话框
-     * @param {string} message - 提示消息
-     * @param {string} title - 标题（可选）
      */
-    const showAlert = (message, title = '提示') => {
+    const showAlert = (message: string, title: string = '提示'): Promise<boolean> => {
         return showDialog({
             type: 'alert',
             title,
@@ -59,11 +81,8 @@ export function useDialog() {
 
     /**
      * 显示确认对话框
-     * @param {string} message - 确认消息
-     * @param {string} title - 标题（可选）
-     * @returns {Promise<boolean>} - 用户是否确认
      */
-    const showConfirm = (message, title = '确认') => {
+    const showConfirm = (message: string, title: string = '确认'): Promise<boolean> => {
         return showDialog({
             type: 'confirm',
             title,
@@ -75,10 +94,8 @@ export function useDialog() {
 
     /**
      * 显示成功对话框
-     * @param {string} message - 成功消息
-     * @param {string} title - 标题（可选）
      */
-    const showSuccess = (message, title = '成功') => {
+    const showSuccess = (message: string, title: string = '成功'): Promise<boolean> => {
         return showDialog({
             type: 'success',
             title,
@@ -89,10 +106,8 @@ export function useDialog() {
 
     /**
      * 显示错误对话框
-     * @param {string} message - 错误消息
-     * @param {string} title - 标题（可选）
      */
-    const showError = (message, title = '错误') => {
+    const showError = (message: string, title: string = '错误'): Promise<boolean> => {
         return showDialog({
             type: 'error',
             title,

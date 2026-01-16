@@ -39,7 +39,7 @@
       </div>
 
       <div class="task-footer">
-        <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+        <span class="task-time">{{ formatDate(task.createdAt) }}</span>
         <div class="task-actions">
           <button
             v-if="task.status === 'completed'"
@@ -70,6 +70,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { formatDate } from '@/utils'
 import TaskProgress from './TaskProgress.vue'
 
 const props = defineProps({
@@ -99,18 +100,6 @@ const handleClick = () => {
   if (props.clickable) {
     emit('click', props.task.id)
   }
-}
-
-const formatTime = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 </script>
 
