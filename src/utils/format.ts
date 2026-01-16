@@ -3,13 +3,13 @@
  * 提供日期、文件大小、时长等常用格式化功能
  */
 
+type DateInput = Date | string | number
+type FormatType = 'default' | 'date' | 'time' | 'relative' | string
+
 /**
  * 格式化日期
- * @param {Date|string|number} date - 日期对象、字符串或时间戳
- * @param {string} format - 格式化模板（可选）
- * @returns {string} 格式化后的日期字符串
  */
-export const formatDate = (date, format = 'default') => {
+export const formatDate = (date: DateInput, format: FormatType = 'default'): string => {
     if (!date) return '-'
 
     const d = new Date(date)
@@ -47,7 +47,7 @@ export const formatDate = (date, format = 'default') => {
     const second = String(d.getSeconds()).padStart(2, '0')
 
     return format
-        .replace('YYYY', year)
+        .replace('YYYY', String(year))
         .replace('MM', month)
         .replace('DD', day)
         .replace('HH', hour)
@@ -57,12 +57,10 @@ export const formatDate = (date, format = 'default') => {
 
 /**
  * 格式化相对时间（如：刚刚、5分钟前、2小时前）
- * @param {Date} date - 日期对象
- * @returns {string} 相对时间字符串
  */
-export const formatRelativeTime = (date) => {
+export const formatRelativeTime = (date: DateInput): string => {
     const now = new Date()
-    const diff = now - new Date(date)
+    const diff = now.getTime() - new Date(date).getTime()
     const seconds = Math.floor(diff / 1000)
     const minutes = Math.floor(seconds / 60)
     const hours = Math.floor(minutes / 60)
@@ -78,11 +76,8 @@ export const formatRelativeTime = (date) => {
 
 /**
  * 格式化文件大小
- * @param {number} bytes - 字节数
- * @param {number} decimals - 小数位数（默认 2）
- * @returns {string} 格式化后的文件大小
  */
-export const formatFileSize = (bytes, decimals = 2) => {
+export const formatFileSize = (bytes: number, decimals: number = 2): string => {
     if (bytes === 0) return '0 B'
     if (!bytes || bytes < 0) return '-'
 
@@ -98,10 +93,8 @@ export const formatFileSize = (bytes, decimals = 2) => {
 
 /**
  * 格式化时长（毫秒转为可读格式）
- * @param {number} ms - 毫秒数
- * @returns {string} 格式化后的时长
  */
-export const formatDuration = (ms) => {
+export const formatDuration = (ms: number): string => {
     if (!ms || ms < 0) return '-'
 
     const seconds = Math.floor(ms / 1000)
@@ -119,33 +112,24 @@ export const formatDuration = (ms) => {
 
 /**
  * 格式化百分比
- * @param {number} value - 数值（0-100）
- * @param {number} decimals - 小数位数（默认 1）
- * @returns {string} 格式化后的百分比
  */
-export const formatPercent = (value, decimals = 1) => {
+export const formatPercent = (value: number, decimals: number = 1): string => {
     if (value === null || value === undefined) return '-'
     return `${value.toFixed(decimals)}%`
 }
 
 /**
  * 格式化数字（添加千分位分隔符）
- * @param {number} num - 数字
- * @returns {string} 格式化后的数字
  */
-export const formatNumber = (num) => {
+export const formatNumber = (num: number): string => {
     if (num === null || num === undefined) return '-'
     return num.toLocaleString('zh-CN')
 }
 
 /**
  * 截断文本
- * @param {string} text - 文本
- * @param {number} maxLength - 最大长度
- * @param {string} suffix - 后缀（默认 '...'）
- * @returns {string} 截断后的文本
  */
-export const truncate = (text, maxLength, suffix = '...') => {
+export const truncate = (text: string, maxLength: number, suffix: string = '...'): string => {
     if (!text) return ''
     if (text.length <= maxLength) return text
     return text.substring(0, maxLength) + suffix
