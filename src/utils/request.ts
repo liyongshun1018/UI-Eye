@@ -4,10 +4,19 @@
  */
 
 import axios from 'axios'
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { useDialog } from '@/composables/useDialog'
 
+// 扩展 axios 配置
+declare module 'axios' {
+    export interface AxiosRequestConfig {
+        showError?: boolean
+        showLoading?: boolean
+    }
+}
+
 // 创建 axios 实例
-const request = axios.create({
+const request: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
     timeout: 30000,
     headers: {
@@ -17,7 +26,7 @@ const request = axios.create({
 
 // 请求拦截器
 request.interceptors.request.use(
-    (config) => {
+    (config: AxiosRequestConfig) => {
         // 可以在这里添加 token
         // const token = localStorage.getItem('token')
         // if (token) {
@@ -31,7 +40,7 @@ request.interceptors.request.use(
 
         return config
     },
-    (error) => {
+    (error: AxiosError) => {
         console.error('请求错误:', error)
         return Promise.reject(error)
     }
@@ -39,14 +48,14 @@ request.interceptors.request.use(
 
 // 响应拦截器
 request.interceptors.response.use(
-    (response) => {
+    (response: AxiosResponse) => {
         // 隐藏 loading
         // hideLoading()
 
         // 直接返回 data
         return response.data
     },
-    (error) => {
+    (error: AxiosError) => {
         // 隐藏 loading
         // hideLoading()
 
@@ -61,7 +70,7 @@ request.interceptors.response.use(
 
             switch (status) {
                 case 400:
-                    errorMessage = data.message || '请求参数错误'
+                    errorMessage = (data as any).message || '请求参数错误'
                     break
                 case 401:
                     errorMessage = '未授权，请登录'
@@ -81,7 +90,7 @@ request.interceptors.response.use(
                     errorMessage = '服务暂时不可用'
                     break
                 default:
-                    errorMessage = data.message || `请求失败 (${status})`
+                    errorMessage = (data as any).message || `请求失败 (${status})`
             }
         } else if (error.request) {
             // 请求已发送但没有收到响应
@@ -102,61 +111,61 @@ request.interceptors.response.use(
 
 /**
  * GET 请求
- * @param {string} url - 请求 URL
- * @param {Object} params - 查询参数
- * @param {Object} config - axios 配置
- * @returns {Promise} Promise 对象
  */
-export const get = (url, params, config = {}) => {
+export const get = <T = any>(
+    url: string,
+    params?: any,
+    config?: AxiosRequestConfig
+): Promise<T> => {
     return request.get(url, { params, ...config })
 }
 
 /**
  * POST 请求
- * @param {string} url - 请求 URL
- * @param {Object} data - 请求数据
- * @param {Object} config - axios 配置
- * @returns {Promise} Promise 对象
  */
-export const post = (url, data, config = {}) => {
+export const post = <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+): Promise<T> => {
     return request.post(url, data, config)
 }
 
 /**
  * PUT 请求
- * @param {string} url - 请求 URL
- * @param {Object} data - 请求数据
- * @param {Object} config - axios 配置
- * @returns {Promise} Promise 对象
  */
-export const put = (url, data, config = {}) => {
+export const put = <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+): Promise<T> => {
     return request.put(url, data, config)
 }
 
 /**
  * DELETE 请求
- * @param {string} url - 请求 URL
- * @param {Object} config - axios 配置
- * @returns {Promise} Promise 对象
  */
-export const del = (url, config = {}) => {
+export const del = <T = any>(
+    url: string,
+    config?: AxiosRequestConfig
+): Promise<T> => {
     return request.delete(url, config)
 }
 
 /**
  * 上传文件
- * @param {string} url - 上传 URL
- * @param {FormData} formData - 表单数据
- * @param {Function} onProgress - 进度回调
- * @returns {Promise} Promise 对象
  */
-export const upload = (url, formData, onProgress) => {
+export const upload = <T = any>(
+    url: string,
+    formData: FormData,
+    onProgress?: (percent: number) => void
+): Promise<T> => {
     return request.post(url, formData, {
         headers: {
             'Content-Type': 'multipart/form-data'
         },
-        onUploadProgress: (progressEvent) => {
-            if (onProgress) {
+        onUploadProgress: (progressEvent: any) => {
+            if (onProgress && progressEvent.total) {
                 const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
                 onProgress(percent)
             }
