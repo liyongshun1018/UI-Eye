@@ -87,7 +87,7 @@ export const useBatchStore = defineStore('batch', () => {
         try {
             const response = await batchTaskAPI.getTasks()
             if (response.success) {
-                tasks.value = response.tasks
+                tasks.value = response.tasks as any
             }
         } catch (err: any) {
             error.value = err.message
@@ -115,8 +115,8 @@ export const useBatchStore = defineStore('batch', () => {
         try {
             const response = await batchTaskAPI.getTask(id)
             if (response.success) {
-                currentTask.value = response.task
-                return response.task
+                currentTask.value = response.task as any
+                return response.task as any
             }
         } catch (err: any) {
             error.value = err.message
@@ -132,12 +132,12 @@ export const useBatchStore = defineStore('batch', () => {
 
         try {
             const response = await batchTaskAPI.createTask(taskData as any)
-            if (response.success) {
-                // 添加到任务列表
-                tasks.value.unshift(response.task)
+            if (response.success && response.taskId) {
+                // 获取新创建的任务详情
+                const newTask = await fetchTaskById(response.taskId)
                 // 更新统计
                 await fetchStats()
-                return response.task
+                return newTask
             }
         } catch (err: any) {
             error.value = err.message
