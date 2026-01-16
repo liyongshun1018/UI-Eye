@@ -69,6 +69,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import batchTaskService from '../services/batchTaskService'
 import { useDialog } from '../composables/useDialog'
+import { formatDate } from '@/utils'
 
 const { showError } = useDialog()
 
@@ -130,11 +131,6 @@ const handleDelete = async () => {
   } catch (err) {
     showError('删除失败: ' + err.message)
   }
-}
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
 }
 </script>
 

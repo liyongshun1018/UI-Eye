@@ -119,6 +119,7 @@ import { useRouter } from 'vue-router'
 import { getReportList } from '@/services/compare'
 import type { CompareReport } from '@/types'
 import { useDialog } from '@/composables/useDialog'
+import { formatDate } from '@/utils'
 
 const { showConfirm, showError } = useDialog()
 
@@ -226,15 +227,6 @@ const getStatusLabel = (status: string) => {
     'failed': '已失败'
   }
   return labels[status] || status
-}
-
-const formatDate = (timestamp: number) => {
-  return new Date(timestamp).toLocaleString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 onMounted(() => {
