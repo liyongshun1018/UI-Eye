@@ -67,7 +67,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import batchTaskService from '../services/batchTaskService'
+import { batchTaskAPI } from '@/api'
 import { useDialog } from '../composables/useDialog.ts'
 import { formatDate } from '@/utils'
 
@@ -83,7 +83,7 @@ const scriptToDelete = ref(null)
 const fetchScripts = async () => {
   loading.value = true
   try {
-    const response = await batchTaskService.getScripts()
+    const response = await batchTaskAPI.getScripts()
     if (response.success) {
       scripts.value = response.scripts
     }
@@ -123,7 +123,7 @@ const confirmDelete = (script) => {
 const handleDelete = async () => {
   if (!scriptToDelete.value) return
   try {
-    const response = await batchTaskService.deleteScript(scriptToDelete.value.id)
+    const response = await batchTaskAPI.deleteScript(scriptToDelete.value.id)
     if (response.success) {
       scripts.value = scripts.value.filter(s => s.id !== scriptToDelete.value.id)
       showDeleteModal.value = false

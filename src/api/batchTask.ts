@@ -74,5 +74,40 @@ export const batchTaskAPI = {
      */
     getStats: () => {
         return get<{ success: boolean; stats: any }>('/batch/stats')
+    },
+
+    /**
+     * 获取所有脚本
+     */
+    getScripts: () => {
+        return get<{ success: boolean; scripts: any[] }>('/batch/scripts')
+    },
+
+    /**
+     * 获取单个脚本
+     */
+    getScript: (id: number) => {
+        return get<{ success: boolean; script: any }>(`/batch/scripts/${id}`)
+    },
+
+    /**
+     * 创建脚本
+     */
+    createScript: (data: any) => {
+        return post<{ success: boolean; scriptId: number }>('/batch/scripts', data)
+    },
+
+    /**
+     * 更新脚本
+     */
+    updateScript: (id: number, data: any) => {
+        return put<{ success: boolean }>(`/batch/scripts/${id}`, data)
+    },
+
+    /**
+     * 删除脚本
+     */
+    deleteScript: (id: number) => {
+        return del<{ success: boolean }>(`/batch/scripts/${id}`)
     }
 }

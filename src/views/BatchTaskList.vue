@@ -117,7 +117,7 @@
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import TaskCard from '../components/batch/TaskCard.vue'
-import batchTaskService from '../services/batchTaskService'
+import { batchTaskAPI } from '@/api'
 
 const router = useRouter()
 
@@ -155,7 +155,7 @@ const loadTasks = async () => {
       offset: (currentPage.value - 1) * pageSize.value
     }
     
-    const response = await batchTaskService.getTaskList(params)
+    const response = await batchTaskAPI.getTasks(params)
     tasks.value = response.tasks
     total.value = response.total
   } catch (error) {
@@ -168,7 +168,7 @@ const loadTasks = async () => {
 // 加载统计信息
 const loadStats = async () => {
   try {
-    const response = await batchTaskService.getStats()
+    const response = await batchTaskAPI.getStats()
     stats.value = response.stats
   } catch (error) {
     console.error('加载统计信息失败:', error)
@@ -218,7 +218,7 @@ const confirmDelete = async () => {
   deletingTaskId.value = null
 
   try {
-    await batchTaskService.deleteTask(taskId)
+    await batchTaskAPI.deleteTask(taskId)
     // 删除成功，静默刷新列表
     await Promise.all([loadTasks(), loadStats()])
   } catch (error) {

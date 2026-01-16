@@ -106,7 +106,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import batchTaskService from '../services/batchTaskService'
+import { batchTaskAPI } from '@/api'
 import { useDialog } from '../composables/useDialog.ts'
 import DesignUpload from '../components/batch/DesignUpload.vue'
 import CompareConfig from '../components/batch/CompareConfig.vue'
@@ -144,7 +144,7 @@ const compareConfig = ref({
 
 const fetchScripts = async () => {
   try {
-    const response = await batchTaskService.getScripts()
+    const response = await batchTaskAPI.getScripts()
     if (response.success) {
       availableScripts.value = response.scripts
     }
@@ -183,10 +183,10 @@ const handleSubmit = async () => {
       options: form.value.options
     }
     
-    const response = await batchTaskService.createTask(data)
-    if (response.success) {
+    const response = await batchTaskAPI.createTask(data)
+    if (response && response.taskId) {
       // 自动启动任务
-      await batchTaskService.startTask(response.taskId)
+      await batchTaskAPI.startTask(response.taskId)
       // 跳转到监控页面
       router.push(`/batch-tasks/${response.taskId}`)
     }

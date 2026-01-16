@@ -45,7 +45,7 @@
 
 <script setup>
 import { onMounted, onBeforeUnmount } from 'vue'
-import { useDialog } from '../../composables/useDialog'
+import { useDialog } from '../../composables/useDialog.ts'
 
 const { dialogState } = useDialog()
 

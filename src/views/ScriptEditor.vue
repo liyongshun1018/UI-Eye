@@ -155,7 +155,7 @@ await page.click('.login-btn');
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import batchTaskService from '../services/batchTaskService'
+import { batchTaskAPI } from '@/api'
 import CodeEditor from '../components/common/CodeEditor.vue'
 import { useDialog } from '../composables/useDialog.ts'
 
@@ -233,7 +233,7 @@ const templates = [
 const fetchScript = async () => {
   if (isNew.value) return
   try {
-    const response = await batchTaskService.getScript(route.params.id)
+    const response = await batchTaskAPI.getScript(route.params.id)
     if (response.success) {
       script.value = response.script
     }
@@ -257,9 +257,9 @@ const saveScript = async () => {
   try {
     let response
     if (isNew.value) {
-      response = await batchTaskService.createScript(script.value)
+      response = await batchTaskAPI.createScript(script.value)
     } else {
-      response = await batchTaskService.updateScript(route.params.id, script.value)
+      response = await batchTaskAPI.updateScript(route.params.id, script.value)
     }
 
     if (response.success) {
