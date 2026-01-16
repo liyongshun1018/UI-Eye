@@ -5,32 +5,50 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+
+// 用户信息接口
+export interface UserInfo {
+    id: number
+    name: string
+    email: string
+    avatar?: string
+    [key: string]: any
+}
+
+// 登录凭证接口
+export interface LoginCredentials {
+    username?: string
+    email?: string
+    password: string
+    [key: string]: any
+}
 
 export const useUserStore = defineStore('user', () => {
     // 状态
-    const userInfo = ref(null)
-    const token = ref(localStorage.getItem('token') || '')
-    const permissions = ref([])
+    const userInfo: Ref<UserInfo | null> = ref(null)
+    const token: Ref<string> = ref(localStorage.getItem('token') || '')
+    const permissions: Ref<string[]> = ref([])
 
     // 计算属性
-    const isLoggedIn = computed(() => {
+    const isLoggedIn: ComputedRef<boolean> = computed(() => {
         return !!token.value && !!userInfo.value
     })
 
-    const userName = computed(() => {
+    const userName: ComputedRef<string> = computed(() => {
         return userInfo.value?.name || '游客'
     })
 
-    const userAvatar = computed(() => {
+    const userAvatar: ComputedRef<string> = computed(() => {
         return userInfo.value?.avatar || ''
     })
 
-    const hasPermission = (permission) => {
+    const hasPermission = (permission: string): boolean => {
         return permissions.value.includes(permission)
     }
 
     // Actions
-    const setToken = (newToken) => {
+    const setToken = (newToken: string): void => {
         token.value = newToken
         if (newToken) {
             localStorage.setItem('token', newToken)
@@ -39,15 +57,15 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
-    const setUserInfo = (info) => {
+    const setUserInfo = (info: UserInfo | null): void => {
         userInfo.value = info
     }
 
-    const setPermissions = (perms) => {
+    const setPermissions = (perms: string[]): void => {
         permissions.value = perms
     }
 
-    const login = async (credentials) => {
+    const login = async (credentials: LoginCredentials): Promise<boolean> => {
         try {
             // TODO: 调用登录 API
             // const response = await loginAPI(credentials)
@@ -72,13 +90,13 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
-    const logout = () => {
+    const logout = (): void => {
         setToken('')
         setUserInfo(null)
         setPermissions([])
     }
 
-    const updateUserInfo = (updates) => {
+    const updateUserInfo = (updates: Partial<UserInfo>): void => {
         if (userInfo.value) {
             userInfo.value = { ...userInfo.value, ...updates }
         }

@@ -5,40 +5,82 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
 import batchTaskService from '@/services/batchTaskService'
+
+// 任务状态类型
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+// 批量任务接口
+export interface BatchTask {
+    id: number
+    name: string
+    status: TaskStatus
+    createdAt: string
+    updatedAt?: string
+    total?: number
+    success?: number
+    failed?: number
+    progress?: number
+    [key: string]: any
+}
+
+// 统计信息接口
+export interface BatchStats {
+    total: number
+    running: number
+    completed: number
+    failed: number
+}
+
+// 任务进度更新接口
+export interface TaskProgress {
+    total?: number
+    success?: number
+    failed?: number
+    progress?: number
+    [key: string]: any
+}
+
+// 创建任务数据接口
+export interface CreateTaskData {
+    name: string
+    urls?: string[]
+    [key: string]: any
+}
 
 export const useBatchStore = defineStore('batch', () => {
     // 状态
-    const tasks = ref([])
-    const currentTask = ref(null)
-    const stats = ref({
+    const tasks: Ref<BatchTask[]> = ref([])
+    const currentTask: Ref<BatchTask | null> = ref(null)
+    const stats: Ref<BatchStats> = ref({
         total: 0,
         running: 0,
         completed: 0,
         failed: 0
     })
-    const loading = ref(false)
-    const error = ref(null)
+    const loading: Ref<boolean> = ref(false)
+    const error: Ref<string | null> = ref(null)
 
     // 计算属性
-    const runningTasks = computed(() => {
+    const runningTasks: ComputedRef<BatchTask[]> = computed(() => {
         return tasks.value.filter(task => task.status === 'running')
     })
 
-    const completedTasks = computed(() => {
+    const completedTasks: ComputedRef<BatchTask[]> = computed(() => {
         return tasks.value.filter(task => task.status === 'completed')
     })
 
-    const failedTasks = computed(() => {
+    const failedTasks: ComputedRef<BatchTask[]> = computed(() => {
         return tasks.value.filter(task => task.status === 'failed')
     })
 
-    const hasRunningTasks = computed(() => {
+    const hasRunningTasks: ComputedRef<boolean> = computed(() => {
         return runningTasks.value.length > 0
     })
 
     // Actions
-    const fetchTasks = async () => {
+    const fetchTasks = async (): Promise<void> => {
         loading.value = true
         error.value = null
 
@@ -47,7 +89,7 @@ export const useBatchStore = defineStore('batch', () => {
             if (response.success) {
                 tasks.value = response.tasks
             }
-        } catch (err) {
+        } catch (err: any) {
             error.value = err.message
             console.error('获取任务列表失败:', err)
         } finally {
@@ -55,7 +97,7 @@ export const useBatchStore = defineStore('batch', () => {
         }
     }
 
-    const fetchStats = async () => {
+    const fetchStats = async (): Promise<void> => {
         try {
             const response = await batchTaskService.getStats()
             if (response.success) {
@@ -66,7 +108,7 @@ export const useBatchStore = defineStore('batch', () => {
         }
     }
 
-    const fetchTaskById = async (id) => {
+    const fetchTaskById = async (id: number): Promise<BatchTask | undefined> => {
         loading.value = true
         error.value = null
 
@@ -76,7 +118,7 @@ export const useBatchStore = defineStore('batch', () => {
                 currentTask.value = response.task
                 return response.task
             }
-        } catch (err) {
+        } catch (err: any) {
             error.value = err.message
             console.error('获取任务详情失败:', err)
         } finally {
@@ -84,7 +126,7 @@ export const useBatchStore = defineStore('batch', () => {
         }
     }
 
-    const createTask = async (taskData) => {
+    const createTask = async (taskData: CreateTaskData): Promise<BatchTask | undefined> => {
         loading.value = true
         error.value = null
 
@@ -97,7 +139,7 @@ export const useBatchStore = defineStore('batch', () => {
                 await fetchStats()
                 return response.task
             }
-        } catch (err) {
+        } catch (err: any) {
             error.value = err.message
             console.error('创建任务失败:', err)
             throw err
@@ -106,7 +148,7 @@ export const useBatchStore = defineStore('batch', () => {
         }
     }
 
-    const deleteTask = async (id) => {
+    const deleteTask = async (id: number): Promise<boolean> => {
         try {
             const response = await batchTaskService.deleteTask(id)
             if (response.success) {
@@ -116,13 +158,14 @@ export const useBatchStore = defineStore('batch', () => {
                 await fetchStats()
                 return true
             }
+            return false
         } catch (err) {
             console.error('删除任务失败:', err)
             throw err
         }
     }
 
-    const updateTaskStatus = (id, status) => {
+    const updateTaskStatus = (id: number, status: TaskStatus): void => {
         const task = tasks.value.find(t => t.id === id)
         if (task) {
             task.status = status
@@ -132,7 +175,7 @@ export const useBatchStore = defineStore('batch', () => {
         }
     }
 
-    const updateTaskProgress = (id, progress) => {
+    const updateTaskProgress = (id: number, progress: TaskProgress): void => {
         const task = tasks.value.find(t => t.id === id)
         if (task) {
             Object.assign(task, progress)
@@ -142,11 +185,11 @@ export const useBatchStore = defineStore('batch', () => {
         }
     }
 
-    const clearError = () => {
+    const clearError = (): void => {
         error.value = null
     }
 
-    const reset = () => {
+    const reset = (): void => {
         tasks.value = []
         currentTask.value = null
         stats.value = {

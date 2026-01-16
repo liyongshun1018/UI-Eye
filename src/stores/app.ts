@@ -5,22 +5,29 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+
+// 主题类型
+export type Theme = 'light' | 'dark'
+
+// 语言类型
+export type Language = 'zh-CN' | 'en-US'
 
 export const useAppStore = defineStore('app', () => {
     // 状态
-    const theme = ref(localStorage.getItem('theme') || 'light')
-    const language = ref(localStorage.getItem('language') || 'zh-CN')
-    const sidebarCollapsed = ref(false)
-    const loading = ref(false)
-    const loadingText = ref('')
+    const theme: Ref<Theme> = ref((localStorage.getItem('theme') as Theme) || 'light')
+    const language: Ref<Language> = ref((localStorage.getItem('language') as Language) || 'zh-CN')
+    const sidebarCollapsed: Ref<boolean> = ref(false)
+    const loading: Ref<boolean> = ref(false)
+    const loadingText: Ref<string> = ref('')
 
     // 计算属性
-    const isDarkMode = computed(() => {
+    const isDarkMode: ComputedRef<boolean> = computed(() => {
         return theme.value === 'dark'
     })
 
     // Actions
-    const setTheme = (newTheme) => {
+    const setTheme = (newTheme: Theme): void => {
         theme.value = newTheme
         localStorage.setItem('theme', newTheme)
 
@@ -32,31 +39,31 @@ export const useAppStore = defineStore('app', () => {
         }
     }
 
-    const toggleTheme = () => {
+    const toggleTheme = (): void => {
         setTheme(isDarkMode.value ? 'light' : 'dark')
     }
 
-    const setLanguage = (lang) => {
+    const setLanguage = (lang: Language): void => {
         language.value = lang
         localStorage.setItem('language', lang)
     }
 
-    const toggleSidebar = () => {
+    const toggleSidebar = (): void => {
         sidebarCollapsed.value = !sidebarCollapsed.value
     }
 
-    const showLoading = (text = '加载中...') => {
+    const showLoading = (text: string = '加载中...'): void => {
         loading.value = true
         loadingText.value = text
     }
 
-    const hideLoading = () => {
+    const hideLoading = (): void => {
         loading.value = false
         loadingText.value = ''
     }
 
     // 初始化主题
-    const initTheme = () => {
+    const initTheme = (): void => {
         if (theme.value === 'dark') {
             document.documentElement.classList.add('dark')
         }
