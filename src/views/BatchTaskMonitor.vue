@@ -135,7 +135,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskProgress from '../components/batch/TaskProgress.vue'
-import batchTaskService from '../services/batchTaskService'
+import { batchTaskAPI } from '@/api'
 import { useWebSocket } from '../composables/useWebSocket'
 
 const route = useRoute()
@@ -204,7 +204,7 @@ const statusText = computed(() => {
 
 const fetchTaskData = async () => {
   try {
-    const response = await batchTaskService.getTask(taskId)
+    const response = await batchTaskAPI.getTask(taskId)
     if (response.success) {
       task.value = response.task
     }

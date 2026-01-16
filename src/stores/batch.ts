@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import batchTaskService from '@/services/batchTaskService'
+import { batchTaskAPI } from '@/api'
 
 // 任务状态类型
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed'
@@ -85,7 +85,7 @@ export const useBatchStore = defineStore('batch', () => {
         error.value = null
 
         try {
-            const response = await batchTaskService.getTasks()
+            const response = await batchTaskAPI.getTasks()
             if (response.success) {
                 tasks.value = response.tasks
             }
@@ -99,7 +99,7 @@ export const useBatchStore = defineStore('batch', () => {
 
     const fetchStats = async (): Promise<void> => {
         try {
-            const response = await batchTaskService.getStats()
+            const response = await batchTaskAPI.getStats()
             if (response.success) {
                 stats.value = response.stats
             }
@@ -113,7 +113,7 @@ export const useBatchStore = defineStore('batch', () => {
         error.value = null
 
         try {
-            const response = await batchTaskService.getTask(id)
+            const response = await batchTaskAPI.getTask(id)
             if (response.success) {
                 currentTask.value = response.task
                 return response.task
@@ -131,7 +131,7 @@ export const useBatchStore = defineStore('batch', () => {
         error.value = null
 
         try {
-            const response = await batchTaskService.createTask(taskData)
+            const response = await batchTaskAPI.createTask(taskData as any)
             if (response.success) {
                 // 添加到任务列表
                 tasks.value.unshift(response.task)
@@ -150,7 +150,7 @@ export const useBatchStore = defineStore('batch', () => {
 
     const deleteTask = async (id: number): Promise<boolean> => {
         try {
-            const response = await batchTaskService.deleteTask(id)
+            const response = await batchTaskAPI.deleteTask(id)
             if (response.success) {
                 // 从列表中移除
                 tasks.value = tasks.value.filter(task => task.id !== id)
