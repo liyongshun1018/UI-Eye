@@ -23,9 +23,10 @@ export const COMPARE_MODES = {
         description: '上传本地设计稿图片进行对比'
     },
     LANHU: {
-        name: '蓝湖地址',
         value: 'lanhu',
-        description: '输入蓝湖链接自动获取设计稿'
+        name: '图片 URL',
+        icon: '🔗',
+        description: '输入远程图片直链地址'
     }
 } as const
 

@@ -63,12 +63,35 @@
         </template>
       </Upload>
     </div>
-
-    <div v-else class="multi-upload-hint">
-      <svg viewBox="0 0 1024 1024" width="16" height="16">
-        <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm-32 232c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v272c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8V296zm32 440a48.01 48.01 0 0 1 0-96 48.01 48.01 0 0 1 0 96z" fill="currentColor"></path>
-      </svg>
-      <span>多设计稿模式下，需要为每个URL单独指定设计稿（暂未实现）</span>
+    
+    <!-- 多图模式 -->
+    <div v-else class="multi-upload-section">
+      <div v-if="!urls || urls.length === 0" class="empty-hint">
+        请先在上方输入 URL 列表，然后再为各页面配置设计稿。
+      </div>
+      <div v-else class="url-design-list">
+        <div v-for="url in urls" :key="url" class="url-design-item">
+          <div class="url-name" :title="url">{{ truncateUrl(url) }}</div>
+          <div class="design-action">
+            <div v-if="modelValue.urlDesignMap[url]" class="design-preview-mini">
+              <img :src="modelValue.urlDesignMap[url]" class="mini-img" />
+              <button class="btn-remove" @click="handleRemoveMap(url)">×</button>
+            </div>
+            <Upload
+              v-else
+              accept="image/*"
+              :max-size="10"
+              :action="uploadAction"
+              :show-file-list="false"
+              @success="(file, res) => handleMultiUploadSuccess(url, res)"
+            >
+              <template #trigger>
+                <button type="button" class="btn-upload-mini">上传设计稿</button>
+              </template>
+            </Upload>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -77,14 +100,12 @@
 /**
  * 设计稿上传组件
  * 
- * @description 该组件用于批量视觉对比任务中设计稿的管理。支持“单设计稿模式”（全局同一参考图）和“多设计稿模式”（每条 URL 独立参考图，开发中）。
+ * @description 该组件用于批量视觉对比任务中设计稿的管理。支持“单设计稿模式”（全局同一参考图）和“多设计稿模式”（每条 URL 独立参考图）。
  * 
  * @typedef {Object} DesignUploadData - 设计稿上传数据结构
  * @property {'single' | 'multiple'} mode - 对比模式
- * @property {string} designSource - 设计稿访问地址或路径
- * 
- * @property {DesignUploadData} modelValue - 组件绑定的设计稿数据 (v-model)
- * @property {string} [uploadAction='/api/upload'] - 内部 Upload 组件使用的接口地址
+ * @property {string} designSource - 单图模式下的设计稿地址
+ * @property {Record<string, string>} urlDesignMap - 多图模式下的 URL -> 路径映射
  */
 import { Upload, Button } from '@ui/components/ui'
 import { DESIGN_MODE } from '@core/constants'
@@ -96,8 +117,14 @@ const props = defineProps({
     required: true,
     default: () => ({
       mode: 'single',
-      designSource: ''
+      designSource: '',
+      urlDesignMap: {}
     })
+  },
+  // 当前任务中的 URL 列表（多图模式使用）
+  urls: {
+    type: Array,
+    default: () => []
   },
   // 上传接口基地址
   uploadAction: {
@@ -134,8 +161,8 @@ const handleModeChange = (mode) => {
   emit('update:modelValue', {
     ...props.modelValue,
     mode,
-    // 切换到多图模式时，清空单图的 source
-    designSource: mode === 'multiple' ? '' : props.modelValue.designSource
+    // 切换模式时保留数据，但可以在这里做一些重置逻辑
+    urlDesignMap: mode === 'multiple' ? (props.modelValue.urlDesignMap || {}) : props.modelValue.urlDesignMap
   })
 }
 
@@ -149,6 +176,38 @@ const handleUploadSuccess = (file, response) => {
     ...props.modelValue,
     designSource: response.url || response.path
   })
+}
+
+/**
+ * 多图模式文件上传成功回调
+ */
+const handleMultiUploadSuccess = (url, response) => {
+  const newMap = { ...props.modelValue.urlDesignMap }
+  newMap[url] = response.url || response.path
+  emit('update:modelValue', {
+    ...props.modelValue,
+    urlDesignMap: newMap
+  })
+}
+
+/**
+ * 移除某个 URL 的设计稿映射
+ */
+const handleRemoveMap = (url) => {
+  const newMap = { ...props.modelValue.urlDesignMap }
+  delete newMap[url]
+  emit('update:modelValue', {
+    ...props.modelValue,
+    urlDesignMap: newMap
+  })
+}
+
+/**
+ * 辅助函数：截断过长的 URL 用于显示
+ */
+const truncateUrl = (url) => {
+  if (url.length <= 40) return url
+  return url.substring(0, 20) + '...' + url.substring(url.length - 15)
 }
 
 /**
@@ -281,6 +340,15 @@ const handleReupload = () => {
   gap: 12px;
   padding: 40px;
   color: #1677ff;
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.upload-placeholder:hover {
+  border-color: #1677ff;
 }
 
 .upload-placeholder p {
@@ -326,19 +394,96 @@ const handleReupload = () => {
   opacity: 1;
 }
 
-.multi-upload-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #fff7e6;
-  border: 1px solid #ffd591;
-  border-radius: 6px;
-  color: #fa8c16;
+.multi-upload-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.empty-hint {
+  text-align: center;
+  color: #9ca3af;
+  padding: 20px;
   font-size: 14px;
 }
 
-.multi-upload-hint svg {
+.url-design-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.url-design-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.url-name {
+  font-family: monospace;
+  font-size: 13px;
+  color: #4b5563;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.design-action {
   flex-shrink: 0;
+  margin-left: 20px;
+}
+
+.design-preview-mini {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.mini-img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+}
+
+.btn-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-upload-mini {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-upload-mini:hover {
+  border-color: #1677ff;
+  color: #1677ff;
 }
 </style>

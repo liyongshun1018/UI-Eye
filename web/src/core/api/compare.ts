@@ -1,7 +1,7 @@
 /**
  * 对比核心 API 服务
  * 
- * @description 该模块封装了单个页面的“即时对比”接口逻辑，支持设计稿上传、蓝湖抓取、开启对比及报告检索。
+ * @description 该模块封装了单个页面的"即时对比"接口逻辑，支持设计稿上传、远程图片获取、开启对比及报告检索。
  * 统一使用 @core/utils/request 作为底层请求引擎。
  */
 import { get, post, upload } from '@core/utils/request'
@@ -20,7 +20,7 @@ export const compareAPI = {
     },
 
     /**
-     * 从远程 URL (如蓝湖) 抓取设计稿并存入服务器
+     * 从远程 URL 获取设计稿并存入服务器
      * @param {string} url - 远程图片 URL
      */
     fetchLanhuDesign: (url: string) => {

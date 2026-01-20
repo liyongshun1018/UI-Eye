@@ -126,5 +126,13 @@ export const batchTaskAPI = {
      */
     deleteScript: (id: number | string) => {
         return del<ApiResponse<any>>(`/batch/scripts/${id}`)
+    },
+
+    /**
+     * 获取批量任务导出接口地址
+     */
+    getExportUrl: (id: number) => {
+        const baseURL = (import.meta as any).env.VITE_API_BASE_URL || '/api'
+        return `${baseURL}/batch/tasks/${id}/export`
     }
 }

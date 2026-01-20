@@ -47,7 +47,7 @@
             <div class="feature-icon">🎨</div>
             <h3 class="feature-title">双模式对比</h3>
             <p class="feature-desc">
-              支持效果图上传和蓝湖地址两种模式，灵活适配不同工作流
+              支持效果图上传和远程图片 URL 两种模式，灵活适配不同工作流
             </p>
           </div>
 

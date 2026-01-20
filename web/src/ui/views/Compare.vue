@@ -72,7 +72,7 @@
             </div>
           </div>
 
-          <!-- 模式二：图片 URL（蓝湖） -->
+          <!-- 模式二：图片 URL -->
           <div v-else class="lanhu-input">
             <input
               v-model="config.designSource"
@@ -81,28 +81,9 @@
               placeholder="https://example.com/design.png"
               required
             />
-            <div class="input-hint-box">
-              <div class="hint-title">
-                <span class="hint-icon">💡</span>
-                <span>如何获取蓝湖图片地址？</span>
-              </div>
-              <ol class="hint-steps">
-                <li>在蓝湖中打开设计稿页面</li>
-                <li>在设计稿图片上<strong>右键点击</strong></li>
-                <li>选择"<strong>复制图片地址</strong>"或"<strong>在新标签页中打开图片</strong>"</li>
-                <li>将复制的图片 URL 粘贴到上方输入框</li>
-              </ol>
-              <div class="hint-note">
-                <span class="note-icon">⚠️</span>
-                <span>注意：必须是以 <code>.png</code> 或 <code>.jpg</code> 结尾的图片地址，不是网页链接</span>
-              </div>
-              <div class="hint-example">
-                <div class="example-label">✅ 正确示例：</div>
-                <code class="example-url good">https://lanhuapp.com/images/xxx.png</code>
-                <div class="example-label">❌ 错误示例：</div>
-                <code class="example-url bad">https://lanhu.aibank.link/web/#/item/...</code>
-              </div>
-            </div>
+            <p class="input-hint">
+              输入图片直链地址（必须是 .png 或 .jpg 结尾的图片 URL）
+            </p>
           </div>
         </div>
 
@@ -228,7 +209,7 @@
 <script setup>
 /**
  * Compare.vue - 开始对比配置页面
- * 用户在此输入 H5 地址、上传设计稿、配置 AI 模型参数并启动对比任务。
+ * 用户在此输入 H5 地址、上传设计稿或输入图片 URL、配置 AI 模型参数并启动对比任务。
  */
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
@@ -246,14 +227,14 @@ const router = useRouter()
 /** 
  * 对比模式配置定义
  * UPLOAD: 本地图片上传模式
- * LANHU: 远程 URL/蓝湖图片模式
+ * LANHU: 远程图片 URL 模式
  */
 const modes = [
   { ...COMPARE_MODES.UPLOAD, icon: '📤' },
   { 
     value: 'lanhu',
     name: '图片 URL',
-    description: '输入远程图片地址（支持蓝湖）',
+    description: '输入远程图片直链地址',
     icon: '🔗'
   }
 ]
@@ -389,7 +370,7 @@ const handleSubmit = async () => {
   isSubmitting.value = true
 
   try {
-    // 第一步：处理设计稿来源。根据模式选择上传到服务器或通过蓝湖 API 解析 URL
+    // 第一步：处理设计稿来源。根据模式选择上传到服务器或通过远程 URL 获取
     if (config.mode === 'upload' && designFile.value) {
       const uploadRes = await compareAPI.uploadDesign(designFile.value)
       if (!uploadRes.success || !uploadRes.data) {
@@ -400,9 +381,9 @@ const handleSubmit = async () => {
     } else if (config.mode === 'lanhu') {
       const lanhuRes = await compareAPI.fetchLanhuDesign(config.designSource)
       if (!lanhuRes.success || !lanhuRes.data) {
-        throw new Error(lanhuRes.message || '获取蓝湖设计稿失败，请检查链接是否正确')
+        throw new Error(lanhuRes.message || '获取远程图片失败，请检查链接是否正确')
       }
-      // 蓝湖模式下，系统会自动识别图片资源的真实 CDN 地址
+      // 远程 URL 模式下，系统会自动下载图片到服务器
       config.designSource = lanhuRes.data.imageUrl
     }
 

@@ -143,8 +143,12 @@ class BatchTaskService {
                 VALUES (?, ?, ?)
             `);
 
+            // 获取每个 URL 对应的设计稿（多图模式支持）
+            const urlDesignMap = options.urlDesignMap || {};
+
             for (const url of urls) {
-                itemStmt.run(taskId, url, null);
+                const itemDesignSource = urlDesignMap[url] || null;
+                itemStmt.run(taskId, url, itemDesignSource);
             }
         }
 

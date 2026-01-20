@@ -2,7 +2,7 @@
 export interface CompareConfig {
     url: string
     mode: 'upload' | 'lanhu'
-    designSource: string // 文件路径或蓝湖链接
+    designSource: string // 文件路径或远程图片 URL
     aiModel: 'qwen' | 'siliconflow' | 'gpt4' | 'claude'
     engine?: 'pixelmatch' | 'resemble' // 对比引擎
     ignoreAntialiasing?: boolean // 是否忽略抗锯齿
@@ -87,7 +87,7 @@ export interface UploadResponse {
     url: string
 }
 
-// 蓝湖设计稿响应
+// 远程图片响应
 export interface LanhuDesignResponse {
     imageUrl: string
     filename: string

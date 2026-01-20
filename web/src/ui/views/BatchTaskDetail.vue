@@ -204,7 +204,8 @@ const goBack = () => {
 }
 
 const handleExport = () => {
-  showAlert('导出功能正在开发中...')
+  const url = batchTaskAPI.getExportUrl(taskId)
+  window.open(url, '_blank')
 }
 
 onMounted(() => {

@@ -63,7 +63,7 @@
 
         <!-- 设计稿上传 -->
         <div class="form-section">
-          <DesignUpload v-model="designUpload" />
+          <DesignUpload v-model="designUpload" :urls="parsedUrls" />
         </div>
 
         <!-- 对比配置 -->
@@ -179,11 +179,19 @@ onMounted(() => {
 })
 
 /**
+ * 将文本框输入的换行符分割成数组并清洗
+ */
+const parsedUrls = computed(() => {
+  return urlText.value
+    .split('\n')
+    .map((u) => u.trim())
+    .filter((u) => u.startsWith('http'))
+})
+
+/**
  * 计算属性：实时统计当前输入的有效 URL 数量
  */
-const urlCount = computed(() => {
-  return urlText.value.split('\n').filter(url => url.trim().length > 0).length
-})
+const urlCount = computed(() => parsedUrls.value.length)
 
 /**
  * 执行表单提交
@@ -192,9 +200,7 @@ const urlCount = computed(() => {
 const handleSubmit = async () => {
   if (submitting.value) return
   
-  // 过滤并清理 URL 列表
-  const urls = urlText.value.split('\n').filter(url => url.trim().length > 0)
-  if (urls.length === 0) {
+  if (parsedUrls.value.length === 0) {
     showAlert('请输入至少一个有效的 URL 地址')
     return
   }
@@ -204,27 +210,39 @@ const handleSubmit = async () => {
     // 构建后端所需的数据载体
     const data = {
       name: form.value.name,
-      urls: urls,
+      urls: parsedUrls.value,
       domain: form.value.domain || null,
       script_id: form.value.scriptId,
       designMode: designUpload.value.mode,
       designSource: designUpload.value.designSource || null,
+      urlDesignMap: designUpload.value.mode === 'multiple' ? designUpload.value.urlDesignMap : null,
       // 只有在上传了设计稿时，才传递对比配置，否则仅作为截图任务
-      compareConfig: designUpload.value.designSource ? compareConfig.value : null,
+      compareConfig: (designUpload.value.designSource || Object.keys(designUpload.value.urlDesignMap).length > 0) 
+        ? compareConfig.value 
+        : null,
       options: form.value.options
     }
     
     // 1. 调用 API 创建任务
     const response = await batchTaskAPI.createTask(data)
     if (response.success && response.data?.taskId) {
+      const taskId = response.data.taskId
       // 2. 任务创建成功后，发送启动信号（非阻塞）
-      await batchTaskAPI.startTask(response.data.taskId)
+      await batchTaskAPI.startTask(taskId)
       // 3. 立即重定向到监控看板
-      router.push(`/batch-tasks/${response.data.taskId}`)
+      showAlert({
+        title: '任务已启动',
+        message: '批量截图与对比任务已在后台排队执行，正在跳转到详情页...',
+        type: 'success'
+      })
+      
+      setTimeout(() => {
+        router.push(`/batch-tasks/${taskId}`)
+      }, 1500)
     }
   } catch (error) {
     console.error('任务提交异常:', error)
-    showError('创建对比任务失败，请稍后重试。原因：' + (error.response?.data?.message || error.message))
+    showError('创建批量任务失败: ' + (error.response?.data?.message || error.message))
   } finally {
     submitting.value = false
   }

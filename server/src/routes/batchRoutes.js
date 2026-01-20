@@ -39,4 +39,9 @@ router.get('/tasks/:id/results', (req, res) => batchController.getTaskResults(re
  */
 router.get('/stats', (req, res) => batchController.getStats(req, res))
 
+/**
+ * 导出任务结果 (CSV)
+ */
+router.get('/tasks/:id/export', (req, res) => batchController.exportTaskResults(req, res))
+
 export default router

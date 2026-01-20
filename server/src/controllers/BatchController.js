@@ -1,5 +1,6 @@
 import BatchTaskService from '../services/BatchTaskService.js'
 import BatchCompareService from '../services/BatchCompareService.js'
+import ExportService from '../services/ExportService.js'
 
 /**
  * 批量任务控制器
@@ -12,11 +13,44 @@ class BatchController {
     }
 
     /**
+     * 导出批量任务结果为 CSV
+     */
+    async exportTaskResults(req, res) {
+        try {
+            const taskId = parseInt(req.params.id)
+            const result = this.batchCompareService.getCompareResults(taskId)
+
+            if (!result || !result.items) {
+                return res.status(404).json({ success: false, message: '未找到对比数据' })
+            }
+
+            const columns = [
+                { key: 'id', label: 'ID' },
+                { key: 'url', label: '页面 URL' },
+                { key: 'status', label: '状态' },
+                { key: 'similarity', label: '相似度(%)' },
+                { key: 'diff_count', label: '差异点数' },
+                { key: 'completed_at', label: '完成时间' },
+                { key: 'error_message', label: '错误信息' }
+            ]
+
+            const csv = ExportService.convertToCSV(result.items, columns)
+
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+            res.setHeader('Content-Disposition', `attachment; filename=ui-eye-batch-report-${taskId}.csv`)
+            res.send(csv)
+        } catch (error) {
+            console.error('[批量控制器] 导出失败:', error)
+            res.status(500).json({ success: false, message: '导出失败: ' + error.message })
+        }
+    }
+
+    /**
      * 创建批量任务
      */
     async createTask(req, res) {
         try {
-            const { name, urls, domain, options, script_id } = req.body
+            const { name, urls, domain, options, script_id, designMode, designSource, urlDesignMap } = req.body
             if (!name || !urls || !Array.isArray(urls) || urls.length === 0) {
                 return res.status(400).json({
                     success: false,
@@ -24,7 +58,13 @@ class BatchController {
                 })
             }
 
-            const taskId = this.batchTaskService.createTask(name, urls, domain, { ...options, script_id })
+            const taskId = this.batchTaskService.createTask(name, urls, domain, {
+                ...options,
+                script_id,
+                designMode,
+                designSource,
+                urlDesignMap
+            })
             res.json({
                 success: true,
                 data: { taskId },

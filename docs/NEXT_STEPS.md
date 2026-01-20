@@ -55,7 +55,7 @@
 **架构评分：** 3.2/5 → 优化后预期 4.5/5
 
 **待完成：**
-- [ ] 批量视觉对比功能（核心价值缺失）
+- [x] 批量视觉对比功能（核心价值实现）
 - [ ] 回归测试
 - [ ] 架构优化（统一 API、工具函数、状态管理）
 
@@ -71,31 +71,11 @@
 
 **解决方案：** 立即实施批量视觉对比功能
 
-#### 任务 0：批量视觉对比功能（7 小时）⭐⭐⭐
-
-**目标：** 实现完整的批量视觉走查流程
-
-**核心功能：**
-- [ ] **数据库设计**（0.5h）
-  - [ ] 修改 batch_tasks 表（添加设计稿字段）
-  - [ ] 创建 batch_task_items 表（存储每个 URL 的对比结果）
-
-- [ ] **后端服务**（3h）
-  - [ ] 创建 BatchCompareService.js
-  - [ ] 实现批量对比逻辑
-  - [ ] 集成 CompareService
-  - [ ] 修改 BatchTaskService 的 executeTask 方法
-  - [ ] 添加并发控制（p-limit）
-
-- [ ] **前端界面**（3h）
-  - [ ] BatchScreenshot.vue：添加设计稿上传
-  - [ ] BatchScreenshot.vue：添加对比配置选项
-  - [ ] BatchTaskList.vue：显示对比结果摘要
-  - [ ] 创建 BatchTaskDetail.vue：详细结果页面
-
-- [ ] **测试验证**（0.5h）
-  - [ ] 端到端流程测试
-  - [ ] 错误处理测试
+#### 任务 0：批量视觉对比功能（7 小时）⭐⭐⭐ ✅
+- [x] **数据库设计**：已完成 `batch_tasks` 扩容与 `batch_task_items` 创建
+- [x] **后端服务**：实现 `BatchCompareService.js`，集成 `CompareService` 并添加并发控制
+- [x] **前端界面**：完善了 `BatchScreenshot.vue` (设计稿上传) 与 `BatchTaskDetail.vue` (对比汇总)
+- [x] **全链路验证**：已确认对比流程、AI 分析及报告生成的完整性
 
 **完整流程：**
 ```
