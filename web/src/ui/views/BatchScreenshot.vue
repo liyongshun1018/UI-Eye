@@ -167,7 +167,7 @@ const fetchScripts = async () => {
   try {
     const response = await batchTaskAPI.getScripts()
     if (response.success) {
-      availableScripts.value = response.scripts
+      availableScripts.value = response.data
     }
   } catch (err) {
     console.error('加载脚本列表失败，请检查后端 API 连通性:', err)
@@ -216,11 +216,11 @@ const handleSubmit = async () => {
     
     // 1. 调用 API 创建任务
     const response = await batchTaskAPI.createTask(data)
-    if (response && response.taskId) {
+    if (response.success && response.data?.taskId) {
       // 2. 任务创建成功后，发送启动信号（非阻塞）
-      await batchTaskAPI.startTask(response.taskId)
+      await batchTaskAPI.startTask(response.data.taskId)
       // 3. 立即重定向到监控看板
-      router.push(`/batch-tasks/${response.taskId}`)
+      router.push(`/batch-tasks/${response.data.taskId}`)
     }
   } catch (error) {
     console.error('任务提交异常:', error)

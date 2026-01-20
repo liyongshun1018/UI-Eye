@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { getPhysicalPath, getPublicUrl } from '../utils/PathUtils.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -134,7 +135,7 @@ class CaptureService {
     async takeScreenshot(page, fullPage) {
         const timestamp = Date.now()
         const filename = `screenshot-${timestamp}.png`
-        const filepath = path.join(__dirname, '../uploads', filename)
+        const filepath = getPhysicalPath('UPLOADS', filename)
 
         await page.screenshot({
             path: filepath,
@@ -144,7 +145,7 @@ class CaptureService {
         return {
             filename,
             path: filepath,
-            url: `/uploads/${filename}`
+            url: getPublicUrl('UPLOADS', filename)
         }
     }
 

@@ -235,7 +235,7 @@ import { useRouter } from 'vue-router'
 // 从常量配置文件导入 UI 枚举和预设
 import { AI_MODELS, COMPARE_MODES, VIEWPORT_PRESETS } from '@core/config/constants'
 // 导入对比相关的 API 服务
-import { uploadDesign, fetchLanhuDesign, startCompare } from '@modules/services/compare'
+import { compareAPI } from '@core/api/compare'
 import { useDialog } from '@modules/composables/useDialog.ts'
 
 const { showError } = useDialog()
@@ -391,14 +391,14 @@ const handleSubmit = async () => {
   try {
     // 第一步：处理设计稿来源。根据模式选择上传到服务器或通过蓝湖 API 解析 URL
     if (config.mode === 'upload' && designFile.value) {
-      const uploadRes = await uploadDesign(designFile.value)
+      const uploadRes = await compareAPI.uploadDesign(designFile.value)
       if (!uploadRes.success || !uploadRes.data) {
         throw new Error(uploadRes.message || '设计稿上传失败，请重试')
       }
       // 将上传成功后的远程全路径回填到配置中
       config.designSource = uploadRes.data.url
     } else if (config.mode === 'lanhu') {
-      const lanhuRes = await fetchLanhuDesign(config.designSource)
+      const lanhuRes = await compareAPI.fetchLanhuDesign(config.designSource)
       if (!lanhuRes.success || !lanhuRes.data) {
         throw new Error(lanhuRes.message || '获取蓝湖设计稿失败，请检查链接是否正确')
       }
@@ -407,7 +407,7 @@ const handleSubmit = async () => {
     }
 
     // 第二步：正式启动后端的截图与对比分析引擎（包含 AI 调用）
-    const compareRes = await startCompare(config)
+    const compareRes = await compareAPI.compare(config)
     if (!compareRes.success || !compareRes.data) {
       throw new Error(compareRes.message || '启动对比任务失败，请重试')
     }

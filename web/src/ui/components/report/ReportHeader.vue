@@ -35,6 +35,7 @@
  * 展示报告的核心元数据，包括所属 URL、生成时间，以及一个极具视觉冲击力的“还原度”环形仪表盘。
  */
 import { computed } from 'vue'
+import { formatDate } from '@core/utils/format'
 
 /**
  * 组件属性定义
@@ -60,10 +61,9 @@ const scoreOffset = computed(() => {
 
 /** 
  * 格式化日期显示 
- * 将 Unix 时间戳转换为符合中文习惯的本地字符串
  */
 const formattedDate = computed(() => {
-  return new Date(props.timestamp).toLocaleString('zh-CN')
+  return formatDate(props.timestamp)
 })
 </script>
 

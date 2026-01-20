@@ -36,6 +36,18 @@ class AIModelBase {
     }
 
     /**
+     * 视觉诊断（用于插件等单次对比场景）
+     * @param {string} actualBase64 - 实测图 Base64
+     * @param {string} designBase64 - 设计稿 Base64
+     * @param {Object} styles - 计算样式集
+     * @param {Object} info - 元素元数据
+     * @returns {Promise<string>} 诊断报告文本
+     */
+    async diagnose(actualBase64, designBase64, styles, info) {
+        throw new Error('子类必须实现 diagnose 方法')
+    }
+
+    /**
      * 验证配置是否有效
      * @returns {boolean} 配置是否有效
      */

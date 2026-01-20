@@ -182,8 +182,8 @@ const loadTasks = async () => {
     }
     
     const response = await batchTaskAPI.getTasks(params)
-    tasks.value = response.tasks
-    total.value = response.total
+    tasks.value = response.data.tasks
+    total.value = response.data.total
   } catch (error) {
     console.error('服务端异步获取任务列表失败:', error)
   } finally {
@@ -197,7 +197,7 @@ const loadTasks = async () => {
 const loadStats = async () => {
   try {
     const response = await batchTaskAPI.getStats()
-    stats.value = response.stats
+    stats.value = response.data
   } catch (error) {
     console.error('统计指标获取异常:', error)
   }
@@ -323,8 +323,8 @@ const loadTasksSilently = async () => {
       offset: (currentPage.value - 1) * pageSize.value
     }
     const response = await batchTaskAPI.getTasks(params)
-    tasks.value = response.tasks
-    total.value = response.total
+    tasks.value = response.data.tasks
+    total.value = response.data.total
   } catch (e) { /* ignore silent failure */ }
 }
 

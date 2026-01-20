@@ -5,6 +5,7 @@
  * 包含任务的生命周期管理（创建、启动、获取状态、删除）以及预定义的自动化交互脚本管理。
  */
 import { get, post, put, del } from '@core/utils/request'
+import type { ApiResponse } from '@core/types'
 
 /**
  * 创建批量任务所需的载体数据
@@ -45,91 +46,85 @@ export interface BatchTask {
 export const batchTaskAPI = {
     /**
      * 发起并创建一个新的批量任务
-     * @param {CreateTaskData} data 
      */
     createTask: (data: CreateTaskData) => {
-        return post<{ success: boolean; taskId: number }>('/batch/tasks', data)
+        return post<ApiResponse<{ taskId: number }>>('/batch/tasks', data)
     },
 
     /**
      * 根据过滤条件获取任务列表及统计
-     * @param {Object} [params]
-     * @param {string} [params.status] - 按任务状态过滤
-     * @param {number} [params.limit] - 分页大小
-     * @param {number} [params.offset] - 分页偏移量
      */
     getTasks: (params?: { status?: string; limit?: number; offset?: number }) => {
-        return get<{ success: boolean; tasks: BatchTask[]; total: number }>('/batch/tasks', params)
+        return get<ApiResponse<{ tasks: BatchTask[]; total: number; page: number; pageSize: number }>>('/batch/tasks', params)
     },
 
     /**
-     * 获取指定任务的实时快照，包含每个 URL 的详细执行结果流
-     * @param {number} id 
+     * 获取指定任务的实时快照
      */
     getTask: (id: number) => {
-        return get<{ success: boolean; task: BatchTask }>(`/batch/tasks/${id}`)
+        return get<ApiResponse<BatchTask>>(`/batch/tasks/${id}`)
+    },
+
+    /**
+     * 获取指定任务的详细对比结果列表
+     */
+    getTaskResults: (id: number) => {
+        return get<ApiResponse<{ task: any; items: any[] }>>(`/batch/tasks/${id}/results`)
     },
 
     /**
      * 手动触发一个处于 pending 状态的任务开始执行
-     * @param {number} id 
      */
     startTask: (id: number) => {
-        return post<{ success: boolean }>(`/batch/tasks/${id}/start`)
+        return post<ApiResponse<any>>(`/batch/tasks/${id}/start`)
     },
 
     /**
-     * 永久删除任务及其关联的所有截图与对比数据记录
-     * @param {number} id 
+     * 永久删除任务
      */
     deleteTask: (id: number) => {
-        return del<{ success: boolean }>(`/batch/tasks/${id}`)
+        return del<ApiResponse<any>>(`/batch/tasks/${id}`)
     },
 
     /**
-     * 获取全局任务仪表盘统计数据（如今日新增、待办、失败率等趋势）
+     * 获取全局任务仪表盘统计数据
      */
     getStats: () => {
-        return get<{ success: boolean; stats: any }>('/batch/stats')
+        return get<ApiResponse<{ total: number; pending: number; running: number; completed: number; failed: number }>>('/batch/stats')
     },
 
     /**
      * 获取所有可复用的 Puppeteer 自动化交互脚本列表
      */
     getScripts: () => {
-        return get<{ success: boolean; scripts: any[] }>('/batch/scripts')
+        return get<ApiResponse<any[]>>('/batch/scripts')
     },
 
     /**
      * 获取单个交互脚本的详细逻辑定义代码
-     * @param {number} id 
      */
-    getScript: (id: number) => {
-        return get<{ success: boolean; script: any }>(`/batch/scripts/${id}`)
+    getScript: (id: number | string) => {
+        return get<ApiResponse<any>>(`/batch/scripts/${id}`)
     },
 
     /**
      * 新增一份自动化交互脚本
-     * @param {any} data 
      */
     createScript: (data: any) => {
-        return post<{ success: boolean; scriptId: number }>('/batch/scripts', data)
+        return post<ApiResponse<{ id: number }>>('/batch/scripts', data)
     },
 
     /**
      * 覆写更新已有的自动化脚本
-     * @param {number} id 
-     * @param {any} data 
      */
-    updateScript: (id: number, data: any) => {
-        return put<{ success: boolean }>(`/batch/scripts/${id}`, data)
+    updateScript: (id: number | string, data: any) => {
+        return put<ApiResponse<any>>(`/batch/scripts/${id}`, data)
     },
 
     /**
      * 永久注销移除一个脚本
-     * @param {number} id 
      */
-    deleteScript: (id: number) => {
-        return del<{ success: boolean }>(`/batch/scripts/${id}`)
+    deleteScript: (id: number | string) => {
+        return del<ApiResponse<any>>(`/batch/scripts/${id}`)
     }
 }

@@ -31,8 +31,12 @@ dist-ssr
 # Server uploads and reports
 server/uploads/*
 server/reports/*
+server/data/uploads/*
+server/data/reports/*
 !server/uploads/.gitkeep
 !server/reports/.gitkeep
+!server/data/uploads/.gitkeep
+!server/data/reports/.gitkeep
 
 # Database
 *.db

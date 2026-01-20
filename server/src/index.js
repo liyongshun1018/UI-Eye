@@ -11,38 +11,53 @@ import batchRoutes from './routes/batchRoutes.js'
 import scriptRoutes from './routes/scriptRoutes.js'
 import http from 'http'
 import wsServer from './services/WSServer.js'
+import { DIRS, ensureAllDirs, URL_PREFIXES, resolveDesignPath } from './utils/PathUtils.js'
+import CompareController from './controllers/CompareController.js'
 
-// 加载环境变量
-dotenv.config()
+// 初始化控制器
+const compareController = new CompareController()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// 加载环境变量
+const rootEnvPath = path.resolve(__dirname, '../../.env')
+const serverEnvPath = path.resolve(__dirname, '../.env')
+
+if (fs.existsSync(serverEnvPath)) {
+    console.log(`[系统] 发现服务端本地配置: ${serverEnvPath}`)
+    dotenv.config({ path: serverEnvPath })
+} else if (fs.existsSync(rootEnvPath)) {
+    console.log(`[系统] 发现并加载项目根目录配置: ${rootEnvPath}`)
+    dotenv.config({ path: rootEnvPath })
+} else {
+    console.warn('[系统] 未找到 .env 配置文件，将尝试使用系统环境变量')
+    dotenv.config()
+}
+
+// 安全核查（调试 401 问题）
+const apiKey = process.env.SILICONFLOW_API_KEY
+if (apiKey) {
+    console.log(`[内核] 已载入 SiliconFlow 密钥: ${apiKey.substring(0, 6)}... (长度: ${apiKey.length})`)
+} else {
+    console.error('[内核] 严重警告: 未检测到 SILICONFLOW_API_KEY，AI 对比功能将失效！')
+}
 
 const app = express()
 const PORT = 3000
 
 // 中间件
 app.use(cors())
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 // 静态文件服务
-app.use('/uploads', express.static(path.join(__dirname, '../data/uploads')))
-app.use('/reports', express.static(path.join(__dirname, '../data/reports')))
-app.use('/api/batch/screenshots', express.static(path.join(__dirname, '../data/screenshots/batch')))
+app.use(URL_PREFIXES.UPLOADS, express.static(DIRS.UPLOADS))
+app.use(URL_PREFIXES.REPORTS, express.static(DIRS.REPORTS))
+app.use(URL_PREFIXES.BATCH_SCREENSHOTS, express.static(DIRS.BATCH_SCREENSHOTS))
 
 // 确保目录存在
-const ensureDir = (dir) => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
-    }
-}
-
-ensureDir(path.join(__dirname, '../data/uploads'))
-ensureDir(path.join(__dirname, '../data/reports'))
-ensureDir(path.join(__dirname, '../data/screenshots/batch'))
-ensureDir(path.join(__dirname, '../data/auth-states'))
-ensureDir(path.join(__dirname, '../data/scripts'))
+ensureAllDirs(fs)
 
 // 初始化数据库并清理过期记录
 deleteOldReports(7) // 删除 7 天前的记录
@@ -50,7 +65,7 @@ deleteOldReports(7) // 删除 7 天前的记录
 // 配置文件上传
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../data/uploads'))
+        cb(null, DIRS.UPLOADS)
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
@@ -216,221 +231,19 @@ app.post('/api/lanhu/fetch', async (req, res) => {
 })
 
 // 开始对比
-app.post('/api/compare', async (req, res) => {
-    try {
-        const config = req.body
+app.post('/api/compare', (req, res) => compareController.startCompare(req, res))
 
-        // 验证必填字段
-        if (!config.url || !config.designSource) {
-            return res.status(400).json({
-                success: false,
-                message: '缺少必填参数'
-            })
-        }
-
-        // 生成报告 ID
-        const reportId = Date.now().toString()
-
-        // 创建对比任务记录到数据库
-        const report = {
-            id: reportId,
-            config,
-            status: 'processing',
-            timestamp: Date.now()
-        }
-
-        createReport(report)
-
-        // 异步处理对比任务
-        processCompareTask(reportId, config).catch(error => {
-            console.error('对比任务失败:', error)
-            updateReport(reportId, {
-                status: 'failed',
-                error: error.message
-            })
-        })
-
-        res.json({
-            success: true,
-            data: { reportId }
-        })
-    } catch (error) {
-        console.error('开始对比失败:', error)
-        res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-})
+// 浏览器插件专用：AI 视觉诊断（单次对比）
+app.post('/api/extension/diagnose', (req, res) => compareController.diagnoseExtension(req, res))
+app.post('/api/extension/export', (req, res) => compareController.exportExtensionReport(req, res))
 
 // 获取对比报告
-app.get('/api/report/:id', (req, res) => {
-    try {
-        const { id } = req.params
-        const report = getReport(id)
-
-        if (!report) {
-            return res.status(404).json({
-                success: false,
-                message: '报告不存在'
-            })
-        }
-
-        res.json({
-            success: true,
-            data: report
-        })
-    } catch (error) {
-        console.error('获取报告失败:', error)
-        res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-})
+app.get('/api/report/:id', (req, res) => compareController.getReport(req, res))
 
 // 获取报告列表
-app.get('/api/reports', (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit) || 50
-        const offset = parseInt(req.query.offset) || 0
+app.get('/api/reports', (req, res) => compareController.getReportList(req, res))
 
-        const reports = getReportList(limit, offset)
 
-        res.json({
-            success: true,
-            data: reports
-        })
-    } catch (error) {
-        console.error('获取报告列表失败:', error)
-        res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-})
-
-// 错误消息辅助函数
-function getCompareErrorMessage(error) {
-    const msg = error.message || String(error)
-    if (msg.includes('ENOENT')) return '文件未找到'
-    if (msg.includes('timeout')) return '操作超时'
-    return msg
-}
-
-// 对比任务处理（真实实现）
-async function processCompareTask(reportId, config) {
-    try {
-        console.log(`\n[对比任务] 开始处理: ${reportId}`)
-
-        // 1. 截取实际页面
-        console.log('\n[1/4] 截取实际页面...')
-        let actualScreenshot
-        try {
-            const { captureScreenshot } = await import('./capture.js')
-            actualScreenshot = await captureScreenshot(config.url, {
-                width: config.viewport.width,
-                height: config.viewport.height,
-                fullPage: true
-            })
-        } catch (error) {
-            throw new Error(`页面截图失败: ${getScreenshotErrorMessage(error)}`)
-        }
-
-        // 2. 获取设计稿路径
-        console.log('\n[2/4] 准备设计稿...')
-        let designPath = config.designSource
-
-        // 如果是相对路径，转换为绝对路径
-        if (!designPath.startsWith('/')) {
-            designPath = path.join(__dirname, designPath)
-        }
-
-        // 如果是 URL 路径，转换为文件系统路径
-        if (designPath.startsWith('/uploads/')) {
-            designPath = path.join(__dirname, '..', 'data', designPath)
-        }
-
-        // 验证设计稿文件是否存在
-        if (!fs.existsSync(designPath)) {
-            throw new Error(`设计稿文件不存在: ${designPath}。请重新上传设计稿。`)
-        }
-
-        console.log('设计稿路径:', designPath)
-        console.log('实际页面路径:', actualScreenshot.path)
-
-        // 3. 图像对比
-        console.log('[3/4] 执行像素级对比')
-        let compareResult
-        try {
-            const CompareService = (await import('./services/CompareService.js')).default
-            const compareService = new CompareService()
-            compareResult = await compareService.compare(
-                designPath,
-                actualScreenshot.path,
-                {
-                    threshold: config.options?.tolerance ? config.options.tolerance / 100 : 0.1,
-                    enableClustering: true // 启用差异聚类
-                }
-            )
-        } catch (error) {
-            throw new Error(`图像对比失败: ${getCompareErrorMessage(error)}`)
-        }
-
-        // 4. AI 分析
-        console.log('[4/4] AI 分析差异')
-        let fixes
-        try {
-            const { analyzeWithAI } = await import('./ai-analyzer.js')
-            fixes = await analyzeWithAI(
-                {
-                    design: designPath,
-                    actual: actualScreenshot.path,
-                    diff: compareResult.diffImage.path
-                },
-                compareResult,
-                config.aiModel || 'qwen'
-            )
-        } catch (error) {
-            console.warn('⚠️ AI 分析失败，使用规则引擎降级:', error.message)
-            // AI 失败时使用空数组，不阻断流程
-            fixes = []
-        }
-
-        // 生成完整报告并保存到数据库
-        const reportData = {
-            similarity: compareResult.similarity,
-            diffPixels: compareResult.diffPixels,
-            totalPixels: compareResult.totalPixels,
-            images: {
-                design: config.designSource.startsWith('http')
-                    ? config.designSource
-                    : `/uploads/${path.basename(config.designSource)}`,
-                actual: actualScreenshot.url,
-                diff: compareResult.diffImage.url
-            },
-            diffImage: compareResult.diffImage, // 包含增强版差异图信息
-            diffRegions: compareResult.diffRegions || [], // 差异区域列表
-            fixes,
-            status: 'completed'
-        }
-
-        updateReport(reportId, reportData)
-
-        console.log(`\n✅ 对比任务完成!`)
-        console.log(`相似度: ${compareResult.similarity}%`)
-        console.log(`差异区域: ${compareResult.diffRegions?.length || 0} 个`)
-        console.log(`修复建议: ${fixes.length} 项`)
-
-    } catch (error) {
-        console.error('\n❌ 对比任务失败:', error)
-        updateReport(reportId, {
-            status: 'failed',
-            error: error.message
-        })
-        throw error
-    }
-}
 
 // 错误处理中间件
 app.use((err, req, res, next) => {

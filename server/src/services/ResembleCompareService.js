@@ -2,6 +2,7 @@ import resemble from 'resemblejs'
 import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { getPhysicalPath, getPublicUrl } from '../utils/PathUtils.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -88,7 +89,7 @@ class ResembleCompareService {
         analysisTime: result.analysisTime,
         diffImage: {
           path: diffImagePath,
-          url: `/reports/${path.basename(diffImagePath)}`
+          url: getPublicUrl('REPORTS', path.basename(diffImagePath))
         },
         rawData: result.rawMisMatchPercentage
       }
@@ -117,8 +118,7 @@ class ResembleCompareService {
   async saveDiffImage(result) {
     const timestamp = Date.now()
     const diffFileName = `diff-resemble-${timestamp}.png`
-    const reportsDir = path.join(__dirname, '../reports')
-    const diffPath = path.join(reportsDir, diffFileName)
+    const diffPath = getPhysicalPath('REPORTS', diffFileName)
 
     // 获取差异图 Buffer
     const diffBuffer = result.getBuffer()

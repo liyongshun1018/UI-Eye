@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import scriptExecutor from './ScriptExecutor.js';
+import { DIRS, getPublicUrl } from '../utils/PathUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +15,7 @@ const __dirname = path.dirname(__filename);
 class BatchScreenshotService {
     constructor(authService) {
         this.authService = authService;
-        this.screenshotsDir = path.join(__dirname, '../screenshots/batch');
+        this.screenshotsDir = DIRS.BATCH_SCREENSHOTS;
     }
 
     /**
@@ -106,6 +107,7 @@ class BatchScreenshotService {
                         success: true,
                         path: screenshotPath,
                         filename,
+                        url_path: getPublicUrl('BATCH_SCREENSHOTS', filename),
                         duration: parseFloat(pageDuration)
                     });
 

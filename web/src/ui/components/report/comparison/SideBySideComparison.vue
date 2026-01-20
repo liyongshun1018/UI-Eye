@@ -17,11 +17,13 @@
       <div class="diff-stats-badge">
         <div class="stats-item">
           <span class="stats-label">差异像素</span>
-          <span class="stats-value">{{ diffPixels.toLocaleString() }}</span>
+          <!-- 防御性渲染：插件直接导出的报告暂无像素 Diff，需兜底显示 0 以防裂屏 -->
+          <span class="stats-value">{{ diffPixels?.toLocaleString() ?? '0' }}</span>
         </div>
         <div class="stats-item">
           <span class="stats-label">相似度</span>
-          <span class="stats-value highlight">{{ similarity.toFixed(1) }}%</span>
+          <!-- 同上，若相似度数据缺失，默认显示 0.0% -->
+          <span class="stats-value highlight">{{ similarity?.toFixed(1) ?? '0.0' }}%</span>
         </div>
       </div>
     </div>

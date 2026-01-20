@@ -128,8 +128,14 @@ const getTypeLabel = (type) => {
  */
 const getDiffProperties = (current, suggested) => {
   /** 解析样式字符串为键值对象 */
+  /**
+   * 内部工具：CSS 字符串解析器
+   * 业务背景：处理 AI 建议或原始样式中的 'key:value; key:value' 格式字符串。
+   * 防御逻辑：增加了对 !str 的判断，防止在处理插件导出的“非完整”数据时因空字符串导致逻辑崩溃。
+   */
   const parseStr = (str) => {
     const props = {}
+    if (!str) return props // 关键防御：如果输入为空（如插件导出暂无具体 CSS），直接返回空对象
     str.split(';').forEach(item => {
       const [key, val] = item.split(':').map(s => s.trim())
       if (key && val) props[key] = val

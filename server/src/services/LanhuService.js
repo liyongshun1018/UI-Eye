@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
+import { DIRS, getPublicUrl } from '../utils/PathUtils.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -17,7 +18,7 @@ class LanhuService {
      * 构造函数
      */
     constructor() {
-        this.uploadsDir = path.join(__dirname, '../../data/uploads')
+        this.uploadsDir = DIRS.UPLOADS
         this.supportedFormats = ['.png', '.jpg', '.jpeg']
     }
 
@@ -96,7 +97,7 @@ class LanhuService {
             const result = {
                 filename,
                 path: filepath,
-                url: `/uploads/${filename}`,
+                url: getPublicUrl('UPLOADS', filename),
                 width: metadata.width,
                 height: metadata.height,
                 format: metadata.format,

@@ -4,6 +4,11 @@ import BatchCompareService from './BatchCompareService.js';
 import PlaywrightAuthService from './PlaywrightAuthService.js';
 import wsServer from './WSServer.js';
 import ScriptService from './ScriptService.js';
+import path from 'path'; // Added path import
+import { fileURLToPath } from 'url'; // Added fileURLToPath import
+
+const __filename = fileURLToPath(import.meta.url); // Added __filename definition
+const __dirname = path.dirname(__filename); // Added __dirname definition
 
 /**
  * 批量任务管理服务
@@ -23,20 +28,27 @@ class BatchTaskService {
     }
 
     /**
-     * 初始化批量任务表
+     * 初始化批量任务相关表结构
      */
     initializeTable() {
-        const createTableSQL = `
+        // 1. 创建或更新主任务表
+        const createTasksSQL = `
       CREATE TABLE IF NOT EXISTS batch_tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         urls TEXT NOT NULL,
         domain TEXT,
+        script_id INTEGER,
         status TEXT NOT NULL DEFAULT 'pending',
         total INTEGER NOT NULL,
         success INTEGER DEFAULT 0,
         failed INTEGER DEFAULT 0,
         duration REAL,
+        design_mode TEXT DEFAULT 'single',
+        design_source TEXT,
+        compare_config TEXT,
+        avg_similarity REAL,
+        total_diff_count INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         started_at DATETIME,
         completed_at DATETIME,
@@ -44,12 +56,53 @@ class BatchTaskService {
         error_message TEXT
       )
     `;
+        this.db.exec(createTasksSQL);
 
-        this.db.exec(createTableSQL);
+        // 补全旧表缺失字段 (Migration)
+        const columns = [
+            { name: 'script_id', type: 'INTEGER' },
+            { name: 'design_mode', type: "TEXT DEFAULT 'single'" },
+            { name: 'design_source', type: 'TEXT' },
+            { name: 'compare_config', type: 'TEXT' },
+            { name: 'avg_similarity', type: 'REAL' },
+            { name: 'total_diff_count', type: 'INTEGER DEFAULT 0' },
+            { name: 'ai_model', type: 'TEXT' }
+        ];
+
+        for (const col of columns) {
+            try {
+                this.db.exec(`ALTER TABLE batch_tasks ADD COLUMN ${col.name} ${col.type}`);
+            } catch (e) {
+                // 列可能已存在
+            }
+        }
+
+        // 2. 创建任务明细表
+        const createItemsSQL = `
+            CREATE TABLE IF NOT EXISTS batch_task_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                url TEXT NOT NULL,
+                design_source TEXT,
+                screenshot_path TEXT,
+                report_id TEXT,
+                status TEXT DEFAULT 'pending',
+                similarity REAL,
+                diff_count INTEGER,
+                error_message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                completed_at DATETIME,
+                FOREIGN KEY (task_id) REFERENCES batch_tasks(id) ON DELETE CASCADE
+            )
+        `;
+        this.db.exec(createItemsSQL);
+
+        // 创建索引
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_batch_tasks_status ON batch_tasks(status)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_batch_tasks_created_at ON batch_tasks(created_at DESC)');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_batch_task_items_task_id ON batch_task_items(task_id)');
 
-        console.log('✅ 批量任务表初始化完成');
+        console.log('✅ 批量任务数据库架构初始化完成');
     }
 
     /**
@@ -64,9 +117,9 @@ class BatchTaskService {
         const stmt = this.db.prepare(`
       INSERT INTO batch_tasks (
         name, urls, domain, script_id, total, status,
-        design_mode, design_source, compare_config
+        design_mode, design_source, compare_config, ai_model
       )
-      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
     `);
 
         const result = stmt.run(
@@ -77,7 +130,8 @@ class BatchTaskService {
             urls.length,
             options.designMode || 'single',
             options.designSource || null,
-            options.compareConfig ? JSON.stringify(options.compareConfig) : null
+            options.compareConfig ? JSON.stringify(options.compareConfig) : null,
+            options.compareConfig?.aiModel || null
         );
 
         const taskId = result.lastInsertRowid;
@@ -215,7 +269,8 @@ class BatchTaskService {
                             total: progress.total,
                             progress: 50 + Math.round((progress.current / progress.total) * 50), // 对比占50%
                             currentUrl: progress.url,
-                            status: progress.status
+                            status: progress.status,
+                            lastResult: progress.lastResult
                         };
 
                         wsServer.broadcastTaskUpdate(taskId, 'task:progress', progressData);
@@ -444,6 +499,7 @@ class BatchTaskService {
             designMode: row.design_mode,
             designSource: row.design_source,
             compareConfig: row.compare_config ? JSON.parse(row.compare_config) : null,
+            aiModel: row.ai_model,
             avgSimilarity: row.avg_similarity,
             totalDiffCount: row.total_diff_count
         };

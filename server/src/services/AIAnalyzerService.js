@@ -136,6 +136,25 @@ class AIAnalyzerService {
             return false
         }
     }
+
+    /**
+     * 执行视觉诊断（插件专用）
+     * 直接对比双图并结合样式数据
+     */
+    async diagnoseVision(actualImage, designImage, styles, elementInfo, modelType = 'siliconflow') {
+        try {
+            const model = this.modelFactory.createModel(modelType)
+
+            if (!model.isConfigValid()) {
+                throw new Error('当前选中的 AI 模型配置无效，请检查环境变量（如 SILICONFLOW_API_KEY）')
+            }
+
+            return await model.diagnose(actualImage, designImage, styles, elementInfo)
+        } catch (error) {
+            console.error('[AI 分析服务] 插件诊断阶段出现异常:', error.message)
+            throw error
+        }
+    }
 }
 
 export default AIAnalyzerService

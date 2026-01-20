@@ -38,9 +38,15 @@
             <span class="stat-label">成功</span>
             <span class="stat-value success">{{ task.success }}</span>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">失败</span>
-            <span class="stat-value failed">{{ task.failed }}</span>
+          <div v-if="task.avgSimilarity !== undefined" class="stat-item">
+            <span class="stat-label">平均相似度</span>
+            <span class="stat-value primary">{{ task.avgSimilarity?.toFixed(1) }}%</span>
+          </div>
+          <div v-if="task.totalDiffCount !== undefined" class="stat-item">
+            <span class="stat-label">差异点数</span>
+            <span class="stat-value" :class="task.totalDiffCount > 0 ? 'failed' : 'success'">
+              {{ task.totalDiffCount }}
+            </span>
           </div>
           <div class="stat-item">
             <span class="stat-label">总耗时</span>
@@ -92,16 +98,28 @@
               <span class="url" :title="result.url">{{ result.url }}</span>
             </div>
             <div class="result-status">
-              <span v-if="result.success" class="duration">{{ result.duration?.toFixed(1) }}s</span>
-              <span v-else class="error-msg">{{ result.error }}</span>
+              <span v-if="result.similarity !== undefined" class="similarity-badge" :class="getSimilarityClass(result.similarity)">
+                {{ result.similarity?.toFixed(1) }}% 对齐
+              </span>
+              <span v-if="result.success && !result.similarity" class="duration">{{ result.duration?.toFixed(1) }}s</span>
+              <span v-else-if="!result.success" class="error-msg">{{ result.error }}</span>
               <span class="icon">{{ result.success ? '✅' : '❌' }}</span>
-              <button 
-                v-if="result.success" 
-                class="btn-view" 
-                @click="previewImage(result)"
-              >
-                查看
-              </button>
+              <div class="actions">
+                <button 
+                  v-if="result.success" 
+                  class="btn-view" 
+                  @click="previewImage(result)"
+                >
+                  预览
+                </button>
+                <button 
+                  v-if="result.reportId" 
+                  class="btn-view primary" 
+                  @click="viewReport(result.reportId)"
+                >
+                  详情报告
+                </button>
+              </div>
             </div>
           </div>
 
@@ -138,106 +156,35 @@
  * @description 核心监控页面，通过 WebSocket 协议监听服务端推送的任务进度消息。
  * 支持展示整体进度条、分类成功/失败统计、单条 URL 执行结果流水线以及截图即时预览。
  */
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskProgress from '@ui/components/batch/TaskProgress.vue'
-import { batchTaskAPI } from '@core/api'
-import { useWebSocket } from '@modules/composables/useWebSocket'
+import { useBatchStore } from '@modules/stores/batch'
 
 const route = useRoute()
 const router = useRouter()
-/** @type {number} - 从路由参数获取的任务 ID */
 const taskId = Number(route.params.id)
+const batchStore = useBatchStore()
 
-/** @type {import('vue').Ref<any|null>} - 当前监控的任务详情对象 */
-const task = ref(null)
-/** @type {import('vue').Ref<boolean>} - 初次加载状态 */
-const loading = ref(true)
-/** @type {import('vue').Ref<string|null>} - 模态框展示的截图预览地址 */
+/** 快照快捷引用 */
+const task = computed(() => batchStore.currentTask)
+const loading = computed(() => batchStore.loading)
 const previewUrl = ref(null)
-
-/**
- * 集成 WebSocket 实时通讯
- * 通过 watch 监听底层推送的消息变更
- */
-const { lastMessage } = useWebSocket()
-
-/**
- * 核心监听逻辑：根据服务端推送的消息类型，增量更新前端 UI
- */
-watch(lastMessage, (message) => {
-  // 仅处理属于当前监控任务的消息
-  if (!message || message.taskId !== taskId) return
-
-  switch (message.type) {
-    case 'task:started':
-      if (task.value) task.value.status = 'running'
-      break
-    case 'task:progress':
-      // 单步进度更新：增加成功计数，并实时将结果推入流水线列表
-      if (task.value) {
-        task.value.success = message.data.current
-        task.value.currentUrl = message.data.currentUrl
-        if (message.data.lastResult) {
-          if (!task.value.results) task.value.results = []
-          // 幂等性校验：防止网络重传导致列表重复
-          const exists = task.value.results.some(r => r.url === message.data.lastResult.url)
-          if (!exists) {
-            task.value.results.push(message.data.lastResult)
-          }
-        }
-      }
-      break
-    case 'task:completed':
-      // 任务成功结束：全量同步最终的执行结果和耗时
-      if (task.value) {
-        Object.assign(task.value, {
-          status: 'completed',
-          success: message.data.success,
-          failed: message.data.failed,
-          duration: message.data.duration,
-          results: message.data.results
-        })
-      }
-      break
-    case 'task:failed':
-      // 任务异常中断
-      if (task.value) {
-        task.value.status = 'failed'
-        task.value.errorMessage = message.data.error
-      }
-      break
-  }
-})
 
 /**
  * 计算属性：将任务阶段状态码映射为友好的中文描述
  */
 const statusText = computed(() => {
+  if (task.value?.status === 'running') {
+    return task.value.currentPhase === 'compare' ? '🚀 核心对比与 AI 分析中...' : '📸 正在截取页面快照...'
+  }
   const statusMap = {
     pending: '等待初始化',
-    running: '正在爬取/对比中',
     completed: '恭喜！任务已完成',
     failed: '任务执行异常'
   }
   return statusMap[task.value?.status] || task.value?.status
 })
-
-/**
- * 初次进入页面时，主动请求一次后端获取任务全量快照
- */
-const fetchTaskData = async () => {
-  try {
-    const response = await batchTaskAPI.getTask(taskId)
-    if (response.success) {
-      task.value = response.task
-    }
-  } catch (error) {
-    console.error('获取任务详细信息失败，请检查任务 ID 是否有效:', error)
-  } finally {
-    loading.value = false
-  }
-}
 
 /**
  * 动作：重置并开始一个新的截图任务
@@ -247,19 +194,34 @@ const handleRestart = () => {
 }
 
 /**
- * 动作：跳转到多维度的可视化分析结果页面（待开发）
+ * 动作：跳转到多维度的可视化分析结果页面
  */
 const handleViewResults = () => {
-  console.log('用户申请查看详细可视化报告，当前数据集大小:', task.value.results?.length)
+  router.push(`/batch-tasks/${taskId}/detail`)
 }
 
 /**
  * 动作：弹出模态框展示截图后的图片
- * @param {any} result - 单个 URL 的执行结果项
  */
 const previewImage = (result) => {
-  // 这里的 URL 拼接需根据后端静态资源配置动态调整
-  previewUrl.value = `/api/batch/screenshots/${result.filename}`
+  const filename = result.filename || result.path?.split(/[\\/]/).pop()
+  previewUrl.value = `/uploads/${filename}`
+}
+
+/**
+ * 动作：跳转到详细报告页面
+ */
+const viewReport = (reportId) => {
+  router.push(`/report/${reportId}`)
+}
+
+/**
+ * 辅助：根据相似度返回样式类
+ */
+const getSimilarityClass = (val) => {
+  if (val >= 98) return 'similarity-high'
+  if (val >= 90) return 'similarity-mid'
+  return 'similarity-low'
 }
 
 /**
@@ -270,11 +232,7 @@ const goBack = () => {
 }
 
 onMounted(() => {
-  fetchTaskData()
-})
-
-onUnmounted(() => {
-  // 此处可进行清理逻辑，目前暂无长连接需手动关闭
+  batchStore.fetchTaskById(taskId)
 })
 </script>
 
@@ -613,5 +571,33 @@ onUnmounted(() => {
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
+}
+.similarity-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.similarity-high { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.similarity-mid { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.similarity-low { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+.stat-value.primary { color: #3b82f6; }
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-view.primary {
+  background: #3b82f6;
+  color: white;
+  border-color: #2563eb;
+}
+
+.btn-view.primary:hover {
+  background: #2563eb;
 }
 </style>

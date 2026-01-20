@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>UI-Eye Assistant</title>
+    <style>
+        :root {
+            --primary: #1890ff;
+            --success: #52c41a;
+            --danger: #ff4d4f;
+            --bg: #ffffff;
+            --text: #333333;
+            --border: #f0f0f0;
+            --gray-bg: #f8fafc;
+        }
+
+        body {
+            width: 420px;
+            margin: 0;
+            padding: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--gray-bg);
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eef2f6;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            margin: 0;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .comparison-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+
+        /* PC 模式下纵向堆叠，以获得横向更大视野 */
+        body.ratio-pc .comparison-cards {
+            grid-template-columns: 1fr;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .card-title {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .preview-area {
+            position: relative;
+            width: 100%;
+            border: 2px dashed #e2e8f0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            /* 允许滚动 */
+            background: #f1f5f9;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 动态比例控制器（微调高度以适配 420px 宽度） */
+        .preview-area.ratio-phone {
+            aspect-ratio: 9 / 16;
+            height: 280px;
+        }
+
+        .preview-area.ratio-pad {
+            aspect-ratio: 3 / 4;
+            height: 240px;
+        }
+
+        /* 动态比例控制器（微调高度以适配 420px 宽度） */
+        .preview-area.ratio-phone {
+            aspect-ratio: 9 / 16;
+            height: 260px;
+        }
+
+        .preview-area.ratio-pad {
+            aspect-ratio: 3 / 4;
+            height: 220px;
+        }
+
+        .preview-area.ratio-pc {
+            aspect-ratio: 16 / 9;
+            height: 180px;
+        }
+
+        .preview-area:hover {
+            border-color: var(--primary);
+            background: #f8fafc;
+        }
+
+        .preview-area img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        /* PC 模式下取消宽度限制，允许左右滚动看全 */
+        body.ratio-pc .preview-area img {
+            max-width: none;
+            height: 95%;
+            /* 填充高度 */
+            margin-left: 0;
+            /* 确保从左侧开始滚动 */
+        }
+
+        body.ratio-pc .preview-area {
+            justify-content: flex-start;
+            /* 滚动模式下靠左对齐 */
+            padding-left: 5px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            color: #475569;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-secondary:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: #f0f7ff;
+        }
+
+        .btn-danger {
+            color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            border-color: var(--danger);
+            background: #fff1f0;
+        }
+
+        #result-area {
+            margin-top: 16px;
+            padding: 16px;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 设备切换器 */
+        .device-selector {
+            display: flex;
+            background: #e2e8f0;
+            padding: 3px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            gap: 2px;
+        }
+
+        .device-tab {
+            flex: 1;
+            padding: 6px;
+            border: none;
+            background: transparent;
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .device-tab.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #eee;
+        }
+
+        /* Markdown 样式增强 */
+        .markdown-body {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #334155;
+        }
+
+        .markdown-body h3,
+        .markdown-body h4 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+            border-left: 3px solid var(--primary);
+            padding-left: 8px;
+        }
+
+        .markdown-body p {
+            margin-bottom: 10px;
+        }
+
+        .markdown-body ul {
+            padding-left: 20px;
+            margin-bottom: 12px;
+        }
+
+        .markdown-body li {
+            margin-bottom: 4px;
+        }
+
+        .markdown-body code {
+            background: #f1f5f9;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #e01e5a;
+        }
+
+        .markdown-body pre {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .footer {
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #eef2f6;
+            text-align: center;
+        }
+
+        .platform-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .platform-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading-spinner {
+            display: none;
+            margin: 15px auto;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e2e8f0;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="header-left">
+            <span style="font-size: 24px;">👁️</span>
+            <h1>UI-Eye 视觉分析</h1>
+        </div>
+        <div class="header-actions">
+            <button id="capture-full-btn" class="btn-secondary">📸 一键截屏</button>
+            <button id="reset-btn" class="btn-secondary btn-danger">🗑️ 重置</button>
+        </div>
+    </div>
+
+    <div class="device-selector">
+        <button class="device-tab active" data-ratio="ratio-phone">📱 手机</button>
+        <button class="device-tab" data-ratio="ratio-pad"> tablet 平板</button>
+        <button class="device-tab" data-ratio="ratio-pc">💻 电脑</button>
+    </div>
+
+    <div class="comparison-cards">
+        <div class="card">
+            <span class="card-title">实测 (Actual)</span>
+            <div id="actual-preview" class="preview-area ratio-phone">
+                <span class="upload-placeholder" style="font-size: 11px;">按 'S' 键<br>或由网页截取</span>
+            </div>
+        </div>
+        <div class="card">
+            <span class="card-title">设计 (Design)</span>
+            <div id="design-dropzone" class="preview-area ratio-phone">
+                <span class="upload-placeholder" style="font-size: 11px;">拖拽设计稿<br>至此处</span>
+                <input type="file" id="design-input" hidden accept="image/*">
+            </div>
+        </div>
+    </div>
+
+    <button id="diagnose-btn" class="btn" disabled>🚀 获取 AI 诊断建议</button>
+
+    <div class="loading-spinner" id="loader"></div>
+
+    <div id="result-area">
+        <div class="result-header">
+            <div style="font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                📋 AI 诊断结果
+            </div>
+        </div>
+        <div id="result-content" class="markdown-body"></div>
+    </div>
+
+    <div class="footer">
+        <a href="#" id="goto-platform" class="platform-link">
+            📊 进入专业管理平台进行深度分析 →
+        </a>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

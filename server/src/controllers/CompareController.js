@@ -5,6 +5,7 @@ import ReportRepository from '../repositories/ReportRepository.js'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
+import { DIRS, resolveDesignPath, normalizeToPublicUrl } from '../utils/PathUtils.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -92,7 +93,7 @@ class CompareController {
 
             // 步骤 2: 准备设计稿路径
             console.log('\n[2/4] 准备设计稿...')
-            const designPath = this.resolveDesignPath(config.designSource)
+            const designPath = resolveDesignPath(config.designSource)
 
             // 验证设计稿文件是否存在
             if (!fs.existsSync(designPath)) {
@@ -128,7 +129,7 @@ class CompareController {
                 diffPixels: compareResult.diffPixels,
                 totalPixels: compareResult.totalPixels,
                 images: {
-                    design: this.normalizeImagePath(config.designSource),
+                    design: normalizeToPublicUrl(config.designSource),
                     actual: actualScreenshot.url,
                     diff: compareResult.diffImage.url
                 },
@@ -146,39 +147,6 @@ class CompareController {
             })
             throw error
         }
-    }
-
-    /**
-     * 解析设计稿路径
-     * @param {string} designSource - 设计稿来源
-     * @returns {string} 绝对路径
-     */
-    resolveDesignPath(designSource) {
-        let designPath = designSource
-
-        // 如果是相对路径，转换为绝对路径
-        if (!designPath.startsWith('/')) {
-            designPath = path.join(__dirname, '..', designPath)
-        }
-
-        // 如果是 URL 路径，转换为文件系统路径
-        if (designPath.startsWith('/uploads/')) {
-            designPath = path.join(__dirname, '..', designPath)
-        }
-
-        return designPath
-    }
-
-    /**
-     * 规范化图片路径（用于响应）
-     * @param {string} imagePath - 图片路径
-     * @returns {string} 规范化后的路径
-     */
-    normalizeImagePath(imagePath) {
-        if (imagePath.startsWith('http') || imagePath.startsWith('/')) {
-            return imagePath.replace(path.join(__dirname, '..'), '')
-        }
-        return `/uploads/${imagePath}`
     }
 
     /**
@@ -209,8 +177,6 @@ class CompareController {
 
     /**
      * 获取报告列表
-     * @param {Request} req - Express 请求对象
-     * @param {Response} res - Express 响应对象
      */
     async getReportList(req, res) {
         try {
@@ -225,6 +191,156 @@ class CompareController {
             })
         } catch (error) {
             this.handleError(res, error, '获取报告列表失败')
+        }
+    }
+
+    /**
+     * 浏览器插件专用：一键导出数据至管理平台
+     * 业务流程：
+     * 1. 接收插件采集的 Base64 图像、AI 诊断结论及样式快照。
+     * 2. 将 Base64 实时持久化为服务端的物理 PNG 文件。
+     * 3. 在 SQLite 中创建一条状态为 'completed' 的正式报告记录。
+     * 4. 返回 reportId 供插件执行详情页跳转。
+     */
+    async exportExtensionReport(req, res) {
+        try {
+            const { actualImage, designImage, diagnosis, styles, elementInfo } = req.body
+
+            // 基础校验：必须包含双端图像数据
+            if (!actualImage || !designImage) {
+                return res.status(400).json({
+                    success: false,
+                    message: '导出失败：缺少图像数据'
+                })
+            }
+
+            const reportId = `ext-${Date.now()}`
+            console.log(`[对比控制器] 正在执行插件数据同步: ${reportId}`)
+
+            /**
+             * 内部助手：将 Base64 编码转化为物理文件
+             * @param {string} base64 - 图像 base64
+             * @param {string} type - 前缀（实测/设计）
+             * @returns {string} 文件名
+             */
+            const saveBase64 = (base64, type) => {
+                const base64Data = base64.replace(/^data:image\/\w+;base64,/, "")
+                const buffer = Buffer.from(base64Data, 'base64')
+                const fileName = `${type}-${reportId}.png`
+                const filePath = path.join(DIRS.UPLOADS, fileName)
+                fs.writeFileSync(filePath, buffer)
+                return fileName
+            }
+
+            // 执行磁盘写入
+            const actualFileName = saveBase64(actualImage, 'actual')
+            const designFileName = saveBase64(designImage, 'design')
+            const actualPath = path.join(DIRS.UPLOADS, actualFileName)
+            const designPath = path.join(DIRS.UPLOADS, designFileName)
+
+            // 执行核心对比：生成像素差异图并计算精确相似度
+            console.log(`[对比控制器] 正在为导出任务执行像素对比分析...`)
+            const compareResult = await this.compareService.compare(designPath, actualPath, {
+                enableClustering: true // 开启聚类分析，以便在平台展现红框标注
+            })
+
+            /** 
+             * 构造标准报告对象 
+             * 此处将插件采集的“非结构化”AI 结论填充到系统的“结构化”Fixes 字段中
+             * 确保 Web 端报表能够平稳渲染。
+             */
+            const reportData = {
+                id: reportId,
+                status: 'completed',
+                timestamp: Date.now(),
+                similarity: compareResult.similarity,
+                diffPixels: compareResult.diffPixels,
+                totalPixels: compareResult.totalPixels,
+                config: {
+                    url: elementInfo?.url || 'Browser Extension',
+                    designSource: designFileName
+                },
+                images: {
+                    // 路径规范化：将绝对路径转化为前端可用的 URLPrefix
+                    actual: normalizeToPublicUrl(actualPath),
+                    design: normalizeToPublicUrl(designPath),
+                    diff: compareResult.diffImage?.annotatedUrl || compareResult.diffImage?.url
+                },
+                diffRegions: compareResult.diffRegions || [],
+                fixes: [{
+                    priority: 'medium',
+                    type: 'layout',
+                    selector: elementInfo?.tagName || 'UI Component',
+                    currentCSS: '',
+                    suggestedCSS: '',
+                    suggestion: diagnosis || 'AI 诊断未生成'
+                }],
+                elementInfo: styles // 原始采集样式快照
+            }
+
+            // 写入数据库
+            this.reportRepo.create(reportData)
+
+            res.json({
+                success: true,
+                data: { reportId },
+                message: '数据已成功镜像至管理平台'
+            })
+        } catch (error) {
+            this.handleError(res, error, '同步导出至平台失败')
+        }
+    }
+
+    /**
+     * 浏览器插件专用：AI 视觉实时诊断
+     * 业务流程：
+     * 1. 接收实测截图与设计稿 Base64。
+     * 2. 调用 AIAnalyzerService 触达 Vision 大模型。
+     * 3. 返回包含 Markdown 语法的视觉走查建议。
+     */
+    async diagnoseExtension(req, res) {
+        try {
+            const { actualImage, designImage, styles, elementInfo } = req.body
+
+            if (!actualImage || !designImage) {
+                return res.status(400).json({
+                    success: false,
+                    message: '缺少图像数据：需同时提供实测图和设计图'
+                })
+            }
+
+            console.log(`[对比控制器] 处理插件诊断请求: ${elementInfo?.tagName || 'Unknown'} @ ${elementInfo?.url || 'Unknown'}`)
+
+            // 1. 临时保存图像以进行物理相似度比对 (增强数据可靠性)
+            const saveTempImg = (base64, type) => {
+                const buffer = Buffer.from(base64.replace(/^data:image\/\w+;base64,/, ""), 'base64')
+                const tempPath = path.join(DIRS.UPLOADS, `temp-${type}-${Date.now()}.png`)
+                fs.writeFileSync(tempPath, buffer)
+                return tempPath
+            }
+
+            const tempActual = saveTempImg(actualImage, 'actual')
+            const tempDesign = saveTempImg(designImage, 'design')
+
+            // 2. 异步并行执行：AI 视觉诊断 + 像素级相似度计算
+            const [diagnosis, compareResult] = await Promise.all([
+                this.aiService.diagnoseVision(actualImage, designImage, styles, elementInfo),
+                this.compareService.compare(tempDesign, tempActual, { enableClustering: false })
+            ])
+
+            // 清理临时文件 (可选，或依赖后续清理任务)
+            // try { fs.unlinkSync(tempActual); fs.unlinkSync(tempDesign); } catch(e) {}
+
+            res.json({
+                success: true,
+                data: {
+                    diagnosis,
+                    similarity: compareResult.similarity
+                },
+                message: 'AI 视觉分析与相似度计算已完成'
+            })
+        } catch (error) {
+            this.handleError(res, error, 'AI 视觉诊断执行失败')
         }
     }
 

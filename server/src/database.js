@@ -241,10 +241,39 @@ function parseReportRow(row) {
     const images = row.images ? JSON.parse(row.images) : null
     const diffImage = row.diff_image ? JSON.parse(row.diff_image) : null
 
-    // 辅助函数：确保 URL 包含正确的目录前缀
+    /**
+     * 内部助手：路径修复与 URL 转换函数
+     * 业务背景：
+     * 插件捕获的图片在存入数据库时可能携带了后端的绝对磁盘路径。
+     * 为了让 Web 前端（Vue）能正常加载这些图片，必须将其转换为基于 Web 的公开 URL。
+     * @param {string} url - 数据库中的原始路径
+     * @param {string} defaultPrefix - 默认路径前缀
+     * @returns {string} 可在浏览器中直接访问的 Web URL
+     */
     const fixUrl = (url, defaultPrefix) => {
-        if (!url || url.startsWith('http') || url.startsWith('/')) return url
-        return `${defaultPrefix}${url}`
+        if (!url) return url
+        // 1. 如果已经是完整的公网 HTTP 链接，不再重复处理
+        if (url.startsWith('http')) return url
+
+        // 提取文件名，忽略具体目录层级
+        const filename = path.basename(url)
+
+        // 2. 特征工程：根据路径中的关键标识，自动匹配对应的 Web 前缀
+        if (url.includes('reports')) return `/reports/${filename}`
+        if (url.includes('screenshots/batch')) return `/api/batch/screenshots/${filename}`
+
+        // 如果文件名带有插件导出的特征词，则归入上传目录
+        if (url.includes('uploads') || url.includes('actual-') || url.includes('design-')) {
+            return `/uploads/${filename}`
+        }
+
+        // 3. 容错处理：如果带了斜杠前缀且属于合法的静态资源路径，直接放行
+        if (url.startsWith('/') && (url.includes('/uploads/') || url.includes('/reports/'))) {
+            return url
+        }
+
+        // 4. 兜底方案：使用传入的默认前缀拼接
+        return `${defaultPrefix}${filename}`
     }
 
     if (images) {

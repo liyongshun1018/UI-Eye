@@ -11,7 +11,7 @@ const scriptService = new ScriptService();
 router.get('/', async (req, res) => {
     try {
         const scripts = scriptService.getScripts();
-        res.json({ success: true, scripts });
+        res.json({ success: true, data: scripts });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -27,7 +27,7 @@ router.get('/:id', async (req, res) => {
         if (!script) {
             return res.status(404).json({ success: false, message: '脚本不存在' });
         }
-        res.json({ success: true, script });
+        res.json({ success: true, data: script });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -44,7 +44,7 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ success: false, message: '名称和代码不能为空' });
         }
         const id = scriptService.createScript(name, code, description);
-        res.json({ success: true, id, message: '脚本已创建' });
+        res.json({ success: true, data: { id }, message: '脚本已创建' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -235,7 +235,7 @@ const fetchScript = async () => {
   try {
     const response = await batchTaskAPI.getScript(route.params.id)
     if (response.success) {
-      script.value = response.script
+      script.value = response.data
     }
   } catch (err) {
     console.error('获取脚本失败:', err)

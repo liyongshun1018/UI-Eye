@@ -4,9 +4,10 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { batchTaskAPI } from '@core/api'
+import { useWebSocket } from '@modules/composables/useWebSocket'
 
 // 任务状态类型
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed'
@@ -87,7 +88,7 @@ export const useBatchStore = defineStore('batch', () => {
         try {
             const response = await batchTaskAPI.getTasks()
             if (response.success) {
-                tasks.value = response.tasks as any
+                tasks.value = response.data.tasks as any
             }
         } catch (err: any) {
             error.value = err.message
@@ -101,7 +102,7 @@ export const useBatchStore = defineStore('batch', () => {
         try {
             const response = await batchTaskAPI.getStats()
             if (response.success) {
-                stats.value = response.stats
+                stats.value = response.data as any
             }
         } catch (err) {
             console.error('获取统计信息失败:', err)
@@ -115,8 +116,8 @@ export const useBatchStore = defineStore('batch', () => {
         try {
             const response = await batchTaskAPI.getTask(id)
             if (response.success) {
-                currentTask.value = response.task as any
-                return response.task as any
+                currentTask.value = response.data as any
+                return response.data as any
             }
         } catch (err: any) {
             error.value = err.message
@@ -132,9 +133,9 @@ export const useBatchStore = defineStore('batch', () => {
 
         try {
             const response = await batchTaskAPI.createTask(taskData as any)
-            if (response.success && response.taskId) {
+            if (response.success && response.data?.taskId) {
                 // 获取新创建的任务详情
-                const newTask = await fetchTaskById(response.taskId)
+                const newTask = await fetchTaskById(response.data.taskId)
                 // 更新统计
                 await fetchStats()
                 return newTask
@@ -201,6 +202,72 @@ export const useBatchStore = defineStore('batch', () => {
         loading.value = false
         error.value = null
     }
+
+    // WebSocket 处理
+    const { lastMessage } = useWebSocket()
+
+    watch(lastMessage, (message) => {
+        if (!message || !message.taskId) return
+
+        const taskId = message.taskId
+        const task = tasks.value.find(t => t.id === taskId)
+        const isCurrent = currentTask.value && currentTask.value.id === taskId
+
+        switch (message.type) {
+            case 'task:started':
+                updateTaskStatus(taskId, 'running')
+                break
+            case 'task:progress':
+                const progressData: TaskProgress = {
+                    currentUrl: message.data.currentUrl,
+                    currentPhase: message.data.phase,
+                    total: message.data.total
+                }
+
+                // 处理增量结果
+                if (message.data.lastResult) {
+                    const target = (isCurrent ? currentTask.value : task) as any
+                    if (target) {
+                        if (!target.results) target.results = []
+                        const existingIndex = target.results.findIndex((r: any) => r.url === message.data.lastResult.url)
+                        if (existingIndex > -1) {
+                            target.results[existingIndex] = { ...target.results[existingIndex], ...message.data.lastResult }
+                        } else {
+                            target.results.push(message.data.lastResult)
+                        }
+                    }
+                }
+
+                if (message.data.phase === 'compare') {
+                    const target = (isCurrent ? currentTask.value : task) as any
+                    if (target) {
+                        progressData.success = target.results?.filter((r: any) => r.status === 'completed' || r.success).length
+                    }
+                } else {
+                    progressData.success = message.data.current
+                }
+
+                updateTaskProgress(taskId, progressData)
+                break
+            case 'task:completed':
+                const finalData = {
+                    status: 'completed',
+                    success: message.data.compare ? message.data.compare.successCount : message.data.screenshot.success,
+                    failed: message.data.compare ? message.data.compare.failedCount : message.data.screenshot.failed,
+                    duration: message.data.duration,
+                    avgSimilarity: message.data.compare?.avgSimilarity,
+                    totalDiffCount: message.data.compare?.totalDiffCount,
+                    results: message.data.compare ? message.data.compare.results : message.data.screenshot.results
+                }
+                updateTaskProgress(taskId, finalData)
+                updateTaskStatus(taskId, 'completed')
+                break
+            case 'task:failed':
+                updateTaskStatus(taskId, 'failed')
+                updateTaskProgress(taskId, { errorMessage: message.data.error })
+                break
+        }
+    })
 
     return {
         // 状态

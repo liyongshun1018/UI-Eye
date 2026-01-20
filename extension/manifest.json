@@ -1,0 +1,41 @@
+{
+    "manifest_version": 3,
+    "name": "UI-Eye Vision Assistant",
+    "version": "1.0.0",
+    "description": "AI 驱动的视觉走查插件，支持登录态绕过、DOM 样式采集与实时对比。",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage",
+        "contextMenus"
+    ],
+    "host_permissions": [
+        "http://localhost:3000/*"
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icons/icon16_inactive.png",
+            "48": "icons/icon48_inactive.png",
+            "128": "icons/icon128_inactive.png"
+        }
+    },
+    "icons": {
+        "16": "icons/icon16_active.png",
+        "48": "icons/icon48_active.png",
+        "128": "icons/icon128_active.png"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ]
+}

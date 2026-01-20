@@ -137,9 +137,9 @@
  * 支持多种对比视图切换。
  */
 // @ts-nocheck
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, computed, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getReport } from '@modules/services/compare'
+import { useReportStore } from '@modules/stores/report'
 
 // 基础组件导入
 import ReportHeader from '@ui/components/report/ReportHeader.vue'
@@ -152,19 +152,15 @@ import DiffRegionsSection from '@ui/components/report/DiffRegionsSection.vue'
 import CSSFixesSection from '@ui/components/report/CSSFixesSection.vue'
 import CSSPreviewModal from '@ui/components/report/CSSPreviewModal.vue'
 
-// 路由控制
+// 路由与 Store
 const route = useRoute()
 const reportId = route.params.id
+const reportStore = useReportStore()
 
-// 页面基础响应式状态
-const isLoading = ref(true)      // 是否正在首次加载
-const errorMessage = ref('')     // 加载错误消息提示
-
-/** 
- * 报告详情数据
- * @type {import('vue').Ref<import('@core/types').CompareReport | undefined>} 
- */
-const reportData = ref()
+// 指向 Store 的快捷引用
+const isLoading = computed(() => reportStore.loading)
+const errorMessage = computed(() => reportStore.error)
+const reportData = computed(() => reportStore.currentReport)
 
 /** 
  * 当前激活的对比模式
@@ -188,71 +184,37 @@ const selectedRegion = ref(null)
 
 /** 
  * 对比模式配置项汇总
- * 用于给模式切换选择器组件提供选项
  */
 const comparisonModes = [
-  { label: '并排对比', value: 'side-by-side', icon: '秤' },
+  { label: '并排对比', value: 'side-by-side', icon: '⚖️' },
   { label: '拨杆对比', value: 'slider', icon: '↔️' },
   { label: '重叠对比', value: 'overlay', icon: '🔄' },
   { label: '差异高亮', value: 'diff', icon: '🎯' }
 ]
 
-/**
- * 核心方法：加载/刷新报告数据
- * 如果报告处于 'processing' 状态，会启动定时轮询
- */
-const loadReport = async () => {
-  try {
-    const res = await getReport(reportId)
-    if (res.success && res.data) {
-      reportData.value = res.data
-      
-      // 智能化轮询策略：如果报告还在处理中，3秒后自动发起下次请求
-      if (res.data.status === 'processing' && !errorMessage.value) {
-        setTimeout(() => {
-          // 确保用户没有离开当前报告页面
-          if (reportData.value?.id === reportId) {
-            loadReport()
-          }
-        }, 3000)
-      }
-    } else {
-      errorMessage.value = res.message || '加载报告失败'
-    }
-  } catch (err) {
-    errorMessage.value = '网络错误，请稍后重试'
-  } finally {
-    isLoading.value = false
-  }
-}
-
-// 生命周期钩子：挂载后立即请求数据
+// 生命周期钩子
 onMounted(() => {
-  loadReport()
+  reportStore.fetchReport(reportId)
+})
+
+onUnmounted(() => {
+  reportStore.reset()
 })
 
 /**
  * 手动刷新报告状态
- * 适用于系统检测到处理中或用户想获取最新 AI 结果时
  */
 const refreshReport = () => {
-  isLoading.value = true
-  loadReport()
+  reportStore.fetchReport(reportId)
 }
 
 /**
  * 业务逻辑：定位到特定的差异区域
- * 当用户在“差异列表”中点击定位按钮时触发
- * @param {import('@core/types').DiffRegion} region - 选中的目标区域对象
  */
 const locateRegion = (region) => {
-  // 1. 强制切换到“差异高亮”视窗模式，以支持区域绘制
   comparisonMode.value = 'diff'
-  
-  // 2. 注入选中的区域数据，供子组件 DiffHighlightComparison 渲染红框
   selectedRegion.value = region
 
-  // 3. 视觉联动：通过 DOM API 平滑滚动到对比图片区域，确聚焦重点
   nextTick(() => {
     const comparisonSection = document.querySelector('.image-comparison')
     if (comparisonSection) {

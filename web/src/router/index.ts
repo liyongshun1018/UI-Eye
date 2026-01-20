@@ -46,6 +46,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'UI-Eye - 任务监控' }
     },
     {
+        path: '/batch-tasks/:id/detail',
+        name: 'BatchTaskDetail',
+        component: () => import('../ui/views/BatchTaskDetail.vue'),
+        meta: { title: 'UI-Eye - 批量对比报告' }
+    },
+    {
         path: '/scripts',
         name: 'ScriptList',
         component: () => import('../ui/views/ScriptList.vue'),

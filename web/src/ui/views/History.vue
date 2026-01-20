@@ -122,7 +122,7 @@
  */
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getReportList } from '@modules/services/compare'
+import { compareAPI } from '@core/api/compare'
 import { useDialog } from '@modules/composables/useDialog.ts'
 import { formatDate } from '@core/utils'
 
@@ -199,7 +199,7 @@ const displayPages = computed(() => {
  */
 const loadReports = async () => {
   try {
-    const res = await getReportList()
+    const res = await compareAPI.getReports()
     if (res.success && res.data) {
       reports.value = res.data
     }

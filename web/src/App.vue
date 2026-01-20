@@ -10,9 +10,9 @@
         
         <div class="navbar-menu">
           <div class="nav-links">
-            <router-link to="/" class="nav-item">首页</router-link>
-            <router-link to="/compare" class="nav-item">开始对比</router-link>
-            <router-link to="/batch-tasks" class="nav-item">批量任务</router-link>
+            <router-link to="/" class="nav-item">🏠 首页</router-link>
+            <router-link to="/compare" class="nav-item">🚀 开始对比</router-link>
+            <router-link to="/batch-tasks" class="nav-item">📦 批量任务</router-link>
             <RouterLink to="/scripts" class="nav-item">📜 交互脚本</RouterLink>
             <RouterLink to="/history" class="nav-item">📊 对比历史</RouterLink>
           </div>
