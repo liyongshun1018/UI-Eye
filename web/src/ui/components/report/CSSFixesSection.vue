@@ -42,7 +42,7 @@
     <template v-else>
       <!-- 视图 1：卡片视窗 -->
       <CSSFixesCards
-        v-if="viewMode === 'cards'"
+        v-if="viewMode === 'card'"
         :fixes="fixes"
         @copy="copyCode"
         @preview="$emit('preview', $event)"

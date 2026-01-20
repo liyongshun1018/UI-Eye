@@ -29,6 +29,8 @@ export interface CompareReport {
     diffRegions?: any[]
     fixes?: any[]
     error?: string
+    progress?: number
+    stepText?: string
     config: {
         url: string
         [key: string]: any

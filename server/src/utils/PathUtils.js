@@ -69,15 +69,16 @@ export const getPublicUrl = (type, filename) => {
 export const resolveDesignPath = (designSource) => {
     if (!designSource) return null;
 
-    // 如果已经是绝对路径
-    if (path.isAbsolute(designSource)) return designSource;
-
-    // 如果是以 /uploads/ 开头的 web 路径
+    // 1. 如果是以 /uploads/ 开头的 Web 访问路径
+    // 注意：在 Mac/Linux 下，/uploads 会被 path.isAbsolute 识别为绝对路径，因此必须先处理
     if (designSource.startsWith('/uploads/')) {
         return path.join(DIRS.UPLOADS, path.basename(designSource));
     }
 
-    // 如果只是文件名
+    // 2. 如果已经是物理磁盘上的绝对路径
+    if (path.isAbsolute(designSource)) return designSource;
+
+    // 3. 如果只是包含后缀的文件名
     return path.join(DIRS.UPLOADS, designSource);
 };
 

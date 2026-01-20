@@ -152,17 +152,19 @@ const checkIframeContent = () => {
     const iframe = iframeRef.value
     if (!iframe) return
     
-    // 尝试访问 iframe 的 document
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+    // 如果能够获取到内容高度
+    const height = iframe.contentWindow?.document?.body?.scrollHeight || 0
+    console.log(`[预览] iframe 内容解析高度: ${height}px`)
     
-    // 如果能访问但 body 为空或高度为 0，可能是加载失败
-    if (iframeDoc && (!iframeDoc.body || iframeDoc.body.offsetHeight < 50)) {
+    // 如果高度过低，很可能说明虽然没有 SecurityError 但页面内容被安全策略阻断了渲染
+    if (height < 20) {
+      console.warn('[预览] 检测到页面内容塌陷，可能存在渲染障碍')
       hasLoadError.value = true
     }
   } catch (e) {
-    // 跨域错误会抛出异常，这是正常的（说明页面已加载）
-    // 只有在完全无法访问时才认为是错误
-    console.log('[预览] iframe 跨域保护已生效（正常）')
+    // 跨域错误抛出异常通常意味着页面已经尝试加载但无法被父窗口读取
+    // 这种情况下如果 iframe 实际上是白屏，通常由 onIframeLoad 的延时逻辑检测
+    console.log('[预览] iframe 跨域保护活跃（符合预期）')
   }
 }
 

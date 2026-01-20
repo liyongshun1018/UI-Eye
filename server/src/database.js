@@ -57,10 +57,12 @@ function initializeTables() {
     }
 
     try {
-        db.exec('ALTER TABLE reports ADD COLUMN diff_regions TEXT')
-    } catch (e) {
-        // 列已存在，忽略错误
-    }
+        db.exec('ALTER TABLE reports ADD COLUMN progress INTEGER DEFAULT 0')
+    } catch (e) { }
+
+    try {
+        db.exec('ALTER TABLE reports ADD COLUMN step_text TEXT')
+    } catch (e) { }
 
     // 创建索引以提升查询性能
     db.exec('CREATE INDEX IF NOT EXISTS idx_timestamp ON reports(timestamp DESC)')
@@ -78,8 +80,8 @@ export function createReport(report) {
     const db = getDatabase()
 
     const stmt = db.prepare(`
-        INSERT INTO reports (id, timestamp, config, status, similarity, diff_pixels, total_pixels, images, fixes, error)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO reports (id, timestamp, config, status, similarity, diff_pixels, total_pixels, images, fixes, error, progress, step_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     stmt.run(
@@ -92,7 +94,9 @@ export function createReport(report) {
         report.totalPixels || null,
         report.images ? JSON.stringify(report.images) : null,
         report.fixes ? JSON.stringify(report.fixes) : null,
-        report.error || null
+        report.error || null,
+        report.progress || 0,
+        report.stepText || null
     )
 
     return report
@@ -152,6 +156,16 @@ export function updateReport(id, data) {
     if (data.error !== undefined) {
         updates.push('error = ?')
         values.push(data.error)
+    }
+
+    if (data.progress !== undefined) {
+        updates.push('progress = ?')
+        values.push(data.progress)
+    }
+
+    if (data.stepText !== undefined) {
+        updates.push('step_text = ?')
+        values.push(data.stepText)
     }
 
     if (updates.length === 0) {
@@ -304,7 +318,9 @@ function parseReportRow(row) {
         diffImage,
         diffRegions: row.diff_regions ? JSON.parse(row.diff_regions) : null,
         fixes: row.fixes ? JSON.parse(row.fixes) : null,
-        error: row.error
+        error: row.error,
+        progress: row.progress || 0,
+        stepText: row.step_text || null
     }
 }
 

@@ -87,9 +87,13 @@ class CompareController {
         console.log('[对比控制器] 配置:', JSON.stringify(config, null, 2))
 
         try {
-            // 步骤 1: 截取实际页面
+            // 步骤 1: 准备环境
+            this.reportRepo.update(reportId, { progress: 10, stepText: '🔍 正在初始化捕获引擎并访问目标页面...' })
+
+            // 步骤 1.1: 截取实际页面
             console.log('\n[1/4] 截取实际页面...')
             const actualScreenshot = await this.captureService.capture(config.url, config.viewport)
+            this.reportRepo.update(reportId, { progress: 30, stepText: '📸 页面捕获成功，正在准备设计稿...' })
 
             // 步骤 2: 准备设计稿路径
             console.log('\n[2/4] 准备设计稿...')
@@ -101,6 +105,7 @@ class CompareController {
             }
 
             // 步骤 3: 图像对比
+            this.reportRepo.update(reportId, { progress: 50, stepText: '⚖️ 正在执行像素级高保真差异对比...' })
             console.log('\n[3/4] 执行像素级对比...')
             const compareResult = await this.compareService.compare(
                 designPath,
@@ -111,6 +116,7 @@ class CompareController {
             )
 
             // 步骤 4: AI 分析
+            this.reportRepo.update(reportId, { progress: 80, stepText: '🧠 人工智能正在深度诊断视觉差异原因...' })
             console.log('\n[4/4] AI 分析差异...')
             const fixes = await this.aiService.analyze(
                 {
@@ -125,6 +131,8 @@ class CompareController {
             // 更新报告为完成状态
             this.reportRepo.update(reportId, {
                 status: 'completed',
+                progress: 100,
+                stepText: '✅ 报告分析已完成！',
                 similarity: compareResult.similarity,
                 diffPixels: compareResult.diffPixels,
                 totalPixels: compareResult.totalPixels,
@@ -133,6 +141,8 @@ class CompareController {
                     actual: actualScreenshot.url,
                     diff: compareResult.diffImage.url
                 },
+                diffRegions: compareResult.diffRegions,
+                diffImage: compareResult.diffImage,
                 fixes
             })
 

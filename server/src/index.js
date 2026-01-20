@@ -145,17 +145,45 @@ app.get('/api/proxy-preview', async (req, res) => {
             html = html.replace('</head>', `${styleTag}</head>`)
         }
 
-        // 3. 禁用页面内的所有链接跳转，防止用户跑偏
+        // 3. 注入“安全沙箱”脚本 (Sandbox)
+        // 核心痛点：目标页面如果调用 history.pushState/replaceState 跨域会导致浏览器抛出 SecurityError 导致 JS 崩溃
+        const sandboxScript = `
+    <script id="ui-eye-sandbox">
+      (function() {
+        console.log('[UI-Eye] 安全沙箱已激活：成功重写 History API 以防止跨域崩溃');
+        const noop = () => {};
+        // 劫持可能导致 SecurityError 的 API
+        window.history.pushState = noop;
+        window.history.replaceState = noop;
+        
+        // 拦截可能的自动跳转
+        window.onbeforeunload = function() { return "预览环境已禁用跳转"; };
+      })();
+    </script>`
+
+        if (html.includes('</head>')) {
+            html = html.replace('</head>', `${sandboxScript}\n</head>`)
+        } else {
+            html += sandboxScript
+        }
+
+        // 4. 禁用页面内的所有链接跳转，防止用户跑偏
         html = html.replace(/<a /g, '<a onclick="return false;" style="cursor: default;" ')
 
-        // 4. 移除阻止 iframe 嵌套的安全响应头
+        // 5. 极致跨域放行：移除所有阻碍 iframe 嵌套和资源加载的安全响应头
         res.removeHeader('X-Frame-Options')
         res.removeHeader('Content-Security-Policy')
         res.removeHeader('X-Content-Type-Options')
+        res.removeHeader('X-XSS-Protection')
 
-        // 5. 设置允许 iframe 嵌套的响应头
-        res.set('Content-Type', 'text/html; charset=utf-8')
-        res.set('X-Frame-Options', 'ALLOWALL')
+        // 设置宽松的响应头
+        res.set({
+            'Content-Type': 'text/html; charset=utf-8',
+            'X-Frame-Options': 'ALLOWALL',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': '*'
+        })
 
         res.send(html)
     } catch (error) {
