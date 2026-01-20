@@ -69,8 +69,20 @@ UI-Eye/
 ├── vite.config.ts            # Vite 配置
 ├── tsconfig.json             # TypeScript 配置
 ├── package.json              # 项目依赖
-├── PRD.md                    # 产品需求文档
-└── README.md                 # 项目说明
+├── docs/                     # 项目文档 (PRD、任务计划、使用指南等)
+└── README.md                 # 项目入口说明
+
+```
+
+## 📂 项目文档
+
+为了保持根目录整洁，所有项目文档已移动至 [docs/](file:///Users/liyongshun/workspace_edu/UI-Eye/docs/) 目录：
+
+- 📋 [产品需求文档 (PRD)](file:///Users/liyongshun/workspace_edu/UI-Eye/docs/PRD.md)
+- 🎯 [下一步行动计划](file:///Users/liyongshun/workspace_edu/UI-Eye/docs/NEXT_STEPS.md)
+- 📖 [使用指南](file:///Users/liyongshun/workspace_edu/UI-Eye/docs/USER_GUIDE.md)
+- 🧪 [测试指南](file:///Users/liyongshun/workspace_edu/UI-Eye/docs/TESTING.md)
+- 📝 [今日工作总结](file:///Users/liyongshun/workspace_edu/UI-Eye/docs/TODAY_SUMMARY.md)
 
 ```
 
