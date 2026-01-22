@@ -34,29 +34,30 @@ class DiffClusteringService {
             const diffPixels = []
             const { width, height, channels } = info
 
+            console.log(`[聚类中心] 正在解析差异图: ${width}x${height}, 通道数: ${channels}`);
+
             // 算法：全图像素扫描（O(N) 复杂度）
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const idx = (y * width + x) * channels
                     const r = data[idx]
                     const g = data[idx + 1]
-                    const b = data[idx + 2]
 
                     /**
-                     * 红色差异检测逻辑：
-                     * Pixelmatch 工具在标记差异时会将像素染成鲜红色 [255, 0, 0]。
-                     * 我们通过高红色通道和较低的绿/蓝通道来精准锁定这些标记。
+                     * 红色/品红色差异检测逻辑增强：
+                     * 放宽阈值以同时支持 pixelmatch (Red) 和 resemble (Pink) 产生的差异像素
                      */
-                    if (r > 200 && g < 100 && b < 100) {
-                        diffPixels.push({ x, y })
+                    if (r > 180 && g < 120) {
+                        diffPixels.push({ x, y, id: y * width + x })
                     }
                 }
             }
 
-            return diffPixels
+            console.log(`[聚类中心] 差异像素抓取完成: ${diffPixels.length} 个像素点`);
+            return { pixels: diffPixels, width, height }
         } catch (error) {
             console.error('提取差异像素失败:', error)
-            return []
+            return { pixels: [], width: 0, height: 0 }
         }
     }
 
@@ -66,31 +67,32 @@ class DiffClusteringService {
      * @param {Array} diffPixels - 差异像素数组
      * @returns {Array} 聚类并排序后的区域列表
      */
-    clusterDiffRegions(diffPixels) {
+    clusterDiffRegions(diffData) {
+        const { pixels: diffPixels, width, height } = diffData
         if (!diffPixels || diffPixels.length === 0) {
             return []
         }
 
         /** 
          * 空间索引加速：
-         * 使用 Map 构建坐标到像素的映射，使邻域查找的时间复杂度从 O(N) 降低到近乎 O(1)
+         * 使用整型索引 id，比字符串拼接快 10 倍以上并节省大量内存
          */
         const pixelMap = new Map()
         for (const pixel of diffPixels) {
-            const key = `${pixel.x},${pixel.y}`
-            pixelMap.set(key, pixel)
+            pixelMap.set(pixel.id, pixel)
         }
 
         const visited = new Set() // 记录已划归区域的像素
         const clusters = []
 
-        // 算法：深度优先/广度优先区域增长
+        console.log(`[聚类引擎] 开始执行区域增长 BFS 算法 (O(N) 优化版)...`);
+
+        // 算法：广度优先区域增长
         for (const pixel of diffPixels) {
-            const key = `${pixel.x},${pixel.y}`
-            if (visited.has(key)) continue
+            if (visited.has(pixel.id)) continue
 
             // 发起一个新区域的增长探测
-            const cluster = this.growRegionOptimized(pixel, pixelMap, visited)
+            const cluster = this.growRegionOptimized(pixel, pixelMap, visited, width, height)
 
             // 质量控制：仅保留面积达到阈值的有效区域
             if (cluster.length >= this.options.minRegionSize) {
@@ -114,34 +116,39 @@ class DiffClusteringService {
      * @param {Set} visited - 全局访问记录
      * @returns {Array} 属于该连通域的所有像素集合
      */
-    growRegionOptimized(seed, pixelMap, visited) {
+    growRegionOptimized(seed, pixelMap, visited, width, height) {
         const cluster = []
         const queue = [seed] // 使用队列实现 BFS
+        let head = 0 // 使用指针索引代替 shift()，将时间复杂度从 O(N^2) 降为 O(N)
         const radius = this.options.neighborhoodRadius
 
-        while (queue.length > 0) {
-            const pixel = queue.shift()
-            const key = `${pixel.x},${pixel.y}`
+        visited.add(seed.id); // 入队瞬间即标记，防止重复入队导致的内存爆炸
 
-            if (visited.has(key)) continue
-
-            visited.add(key)
+        while (head < queue.length) {
+            const pixel = queue[head++]
             cluster.push(pixel)
 
             // 探测当前像素周围的邻域
             for (let dx = -radius; dx <= radius; dx++) {
                 for (let dy = -radius; dy <= radius; dy++) {
+                    if (dx === 0 && dy === 0) continue
+
                     const neighborX = pixel.x + dx
                     const neighborY = pixel.y + dy
-                    const neighborKey = `${neighborX},${neighborY}`
 
-                    if (visited.has(neighborKey)) continue
-                    if (!pixelMap.has(neighborKey)) continue
+                    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) continue
+
+                    const neighborId = neighborY * width + neighborX
+                    if (visited.has(neighborId)) continue
+
+                    const neighbor = pixelMap.get(neighborId)
+                    if (!neighbor) continue
 
                     // 距离检测：仅将半径圆圈内的像素吸收入本区域
-                    const distance = Math.sqrt(dx * dx + dy * dy)
-                    if (distance <= radius) {
-                        queue.push(pixelMap.get(neighborKey))
+                    const distanceSq = dx * dx + dy * dy
+                    if (distanceSq <= radius * radius) {
+                        visited.add(neighborId); // 关键：入队瞬间即标记
+                        queue.push(neighbor)
                     }
                 }
             }
@@ -152,24 +159,36 @@ class DiffClusteringService {
 
     /**
      * 计算聚类的包围盒（Bounding Box）
-     * @param {Array} cluster - 属于该区域的像素像素数组
+     * 采用流式计算查找极值，确保在处理海量像素（30万+）时不会触发栈溢出
+     * @param {Array} cluster - 属于该区域的像素数组
      * @returns {Object} 带有冗余外边距的包围盒数据
      */
     getBoundingBox(cluster) {
-        const xs = cluster.map(p => p.x)
-        const ys = cluster.map(p => p.y)
+        if (!cluster || cluster.length === 0) return { x: 0, y: 0, width: 0, height: 0, pixelCount: 0 }
 
-        // 计算最小外接矩形，并应用 padding 使标注框不那么局促
-        const minX = Math.max(0, Math.min(...xs) - this.options.padding)
-        const minY = Math.max(0, Math.min(...ys) - this.options.padding)
-        const maxX = Math.max(...xs) + this.options.padding
-        const maxY = Math.max(...ys) + this.options.padding
+        let minX = Infinity, minY = Infinity
+        let maxX = -Infinity, maxY = -Infinity
+
+        // 单次循环查找，避免 Math.min(...xs) 导致的栈溢出
+        for (let i = 0; i < cluster.length; i++) {
+            const p = cluster[i]
+            if (p.x < minX) minX = p.x
+            if (p.x > maxX) maxX = p.x
+            if (p.y < minY) minY = p.y
+            if (p.y > maxY) maxY = p.y
+        }
+
+        // 应用内容内边距并确保不越界
+        const finalMinX = Math.max(0, minX - this.options.padding)
+        const finalMinY = Math.max(0, minY - this.options.padding)
+        const finalMaxX = maxX + this.options.padding
+        const finalMaxY = maxY + this.options.padding
 
         return {
-            x: minX,
-            y: minY,
-            width: maxX - minX,
-            height: maxY - minY,
+            x: finalMinX,
+            y: finalMinY,
+            width: finalMaxX - finalMinX,
+            height: finalMaxY - finalMinY,
             pixelCount: cluster.length
         }
     }
@@ -181,16 +200,18 @@ class DiffClusteringService {
      */
     async analyzeDiffRegions(diffImagePath) {
         try {
-            // 1. 物理提取：识别所有红色差异像素
-            const diffPixels = await this.extractDiffPixels(diffImagePath)
+            // 1. 物理提取：识别所有红色差异像素 (目前已升级为高性能索引模式)
+            const diffData = await this.extractDiffPixels(diffImagePath)
+            const { pixels: diffPixels } = diffData
+
             console.log(`[聚类引擎] 原始差异像素提取总量: ${diffPixels.length}`)
 
             if (diffPixels.length === 0) {
                 return []
             }
 
-            // 2. 空间聚合：基于邻域半径将散点聚集成块
-            let regions = this.clusterDiffRegions(diffPixels)
+            // 2. 空间聚合：基于邻域半径将散点聚集成块 (O(N) 优化版)
+            let regions = this.clusterDiffRegions(diffData)
 
             // 3. 语义合并：将视觉上非常接近（如文字行与行之间）的碎片区域合并为大块
             regions = this.mergeNearbyRegions(regions)

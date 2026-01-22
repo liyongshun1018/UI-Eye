@@ -1,9 +1,12 @@
 import { getDatabase } from '../database.js';
-import BatchScreenshotService from './BatchScreenshotService.js';
-import BatchCompareService from './BatchCompareService.js';
-import PlaywrightAuthService from './PlaywrightAuthService.js';
+import AuthService from './AuthService.js';
 import wsServer from './WSServer.js';
 import ScriptService from './ScriptService.js';
+import CompareTaskService from './CompareTaskService.js';
+import pLimit from 'p-limit';
+import { resolveDesignPath } from '../utils/PathUtils.js';
+import sharp from 'sharp';
+import fs from 'fs';
 import path from 'path'; // Added path import
 import { fileURLToPath } from 'url'; // Added fileURLToPath import
 
@@ -17,9 +20,7 @@ const __dirname = path.dirname(__filename); // Added __dirname definition
 class BatchTaskService {
     constructor() {
         this.db = getDatabase();
-        this.authService = new PlaywrightAuthService();
-        this.batchScreenshotService = new BatchScreenshotService(this.authService);
-        this.batchCompareService = new BatchCompareService();
+        this.authService = new AuthService();
         this.scriptService = new ScriptService();
         this.runningTasks = new Map(); // 存储正在运行的任务
 
@@ -66,7 +67,10 @@ class BatchTaskService {
             { name: 'compare_config', type: 'TEXT' },
             { name: 'avg_similarity', type: 'REAL' },
             { name: 'total_diff_count', type: 'INTEGER DEFAULT 0' },
-            { name: 'ai_model', type: 'TEXT' }
+            { name: 'ai_model', type: 'TEXT' },
+            { name: 'current_phase', type: 'TEXT' },
+            { name: 'progress', type: 'INTEGER DEFAULT 0' },
+            { name: 'step_text', type: 'TEXT' }
         ];
 
         for (const col of columns) {
@@ -206,140 +210,192 @@ class BatchTaskService {
         const task = this.getTask(taskId);
         const urls = task.urls;
         const startTime = Date.now();
+        const limit = pLimit(3); // 限制并发数为 3
 
         try {
-            // 获取脚本代码（如果存在）
-            let scriptCode = null;
-            if (task.script_id) {
-                const script = this.scriptService.getScript(task.script_id);
-                if (script) {
-                    scriptCode = script.code;
-                }
-            }
+            console.log(`[BatchService] 🚀 启动标准化流水线: 任务 ${taskId}, 模式=${task.designMode}`);
 
-            // 步骤 1: 执行批量截图
-            console.log(`📸 开始批量截图: 任务 ${taskId}`);
-            const screenshotResult = await this.batchScreenshotService.batchScreenshot(
-                urls,
-                task.domain,
-                {
-                    headless: true,
-                    fullPage: true,
-                    scriptCode,
-                    onProgress: (current, total, currentUrl, lastResult) => {
-                        // 更新截图进度
-                        this.updateTaskProgress(taskId, current, total);
+            // 构造原子任务集
+            const jobs = urls.map((url, index) => {
+                return limit(async () => {
+                    const currentUrl = url;
 
-                        // 更新任务明细的截图路径
-                        if (lastResult && lastResult.success) {
+                    // 广播当前处理中的 URL
+                    wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
+                        phase: 'processing',
+                        current: index + 1,
+                        total: urls.length,
+                        currentUrl
+                    });
+
+                    // 准备单个子任务的配置
+                    const subConfig = {
+                        url,
+                        designSource: task.designMode === 'multiple' ? (task.urlDesignMap?.[url] || task.designSource) : task.designSource,
+                        options: task.compareConfig || {},
+                        aiModel: task.aiModel,
+                        taskId,
+                        index
+                    };
+
+                    // 调用统一的原子执行器
+                    const result = await CompareTaskService.execute(subConfig, {
+                        onProgress: (p) => {
+                            // 实时同步子任务阶段进度给批量 UI，并实时落库持久化
+                            const phase = p.currentPhase || 'processing';
+                            const progress = p.progress || 0;
+                            const stepText = p.stepText || '';
+
                             this.db.prepare(`
-                                UPDATE batch_task_items 
-                                SET screenshot_path = ?
-                                WHERE task_id = ? AND url = ?
-                            `).run(lastResult.path, taskId, currentUrl);
-                        }
+                                UPDATE batch_tasks 
+                                SET current_phase = ?, progress = ?, step_text = ?
+                                WHERE id = ?
+                            `).run(phase, progress, stepText, taskId);
 
-                        const progressData = {
-                            phase: 'screenshot',
-                            current,
-                            total,
-                            progress: Math.round((current / total) * 50), // 截图占50%
-                            currentUrl,
-                            lastResult
+                            wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
+                                phase,
+                                progress,
+                                stepText,
+                                currentUrl: url,
+                                current: index + 1,
+                                total: urls.length
+                            });
+                        }
+                    });
+
+                    // 持久化子条目结果并透传给前端
+                    if (result.success) {
+                        const finalItemResult = {
+                            url,
+                            success: true,
+                            reportId: result.reportId,
+                            similarity: result.similarity,
+                            diffCount: result.diffRegions?.length || 0,
+                            screenshot_path: result.images.actual,
+                            status: 'completed'
                         };
 
-                        wsServer.broadcastTaskUpdate(taskId, 'task:progress', progressData);
+                        this.db.prepare(`
+                            UPDATE batch_task_items 
+                            SET screenshot_path = ?, status = 'completed', report_id = ?, 
+                                similarity = ?, diff_count = ?, completed_at = CURRENT_TIMESTAMP
+                            WHERE task_id = ? AND url = ?
+                        `).run(
+                            result.images.actual,
+                            result.reportId,
+                            result.similarity,
+                            result.diffRegions ? result.diffRegions.length : 0,
+                            taskId,
+                            url
+                        );
 
-                        if (onProgress) {
-                            onProgress(taskId, progressData);
+                        // 核心加固：实时同步统计到主表，解决刷新归零
+                        const items = this.db.prepare('SELECT similarity, diff_count FROM batch_task_items WHERE task_id = ? AND status = ?').all(taskId, 'completed');
+                        if (items.length > 0) {
+                            this.db.prepare(`
+                                UPDATE batch_tasks 
+                                SET total_diff_count = (SELECT SUM(diff_count) FROM batch_task_items WHERE task_id = ? AND status = 'completed'),
+                                    avg_similarity = (SELECT AVG(similarity) FROM batch_task_items WHERE task_id = ? AND status = 'completed')
+                                WHERE id = ?
+                            `).run(taskId, taskId, taskId);
                         }
+
+                        // 核心：子项完成后发送“含金量”消息，触发表格刷新
+                        wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
+                            phase: 'finish',
+                            progress: 100,
+                            currentUrl: url,
+                            current: index + 1,
+                            total: urls.length,
+                            lastResult: {
+                                ...finalItemResult,
+                                diffCount: finalItemResult.diffCount // 明确字段名
+                            }
+                        });
+
+                    } else {
+                        const failedResult = { url, success: false, error: result.error, status: 'failed' };
+                        this.db.prepare(`
+                            UPDATE batch_task_items 
+                            SET error_message = ?, status = 'failed', completed_at = CURRENT_TIMESTAMP
+                            WHERE task_id = ? AND url = ?
+                        `).run(result.error, taskId, url);
+
+                        wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
+                            phase: 'finish',
+                            progress: 0,
+                            currentUrl: url,
+                            current: index + 1,
+                            total: urls.length,
+                            lastResult: failedResult
+                        });
                     }
-                }
-            );
 
-            console.log(`✅ 批量截图完成: 成功 ${screenshotResult.success}/${screenshotResult.total}`);
+                    // 更新任务总体进度（成功数）
+                    const currentStats = this.db.prepare('SELECT COUNT(*) as count FROM batch_task_items WHERE task_id = ? AND status = ?').get(taskId, 'completed');
+                    this.updateTaskProgress(taskId, currentStats.count, urls.length);
 
-            // 步骤 2: 执行批量对比（如果提供了设计稿）
-            let compareResult = null;
-            if (task.designSource) {
-                console.log(`🔍 开始批量对比: 任务 ${taskId}`);
+                    return result;
+                });
+            });
 
-                compareResult = await this.batchCompareService.batchCompare(
-                    taskId,
-                    (progress) => {
-                        const progressData = {
-                            phase: 'compare',
-                            current: progress.current,
-                            total: progress.total,
-                            progress: 50 + Math.round((progress.current / progress.total) * 50), // 对比占50%
-                            currentUrl: progress.url,
-                            status: progress.status,
-                            lastResult: progress.lastResult
-                        };
+            // 等待所有原子任务完成
+            const results = await Promise.all(jobs);
 
-                        wsServer.broadcastTaskUpdate(taskId, 'task:progress', progressData);
+            // 统计分析并归档主任务
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            const stats = this.db.prepare(`
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    AVG(similarity) as avg_similarity,
+                    SUM(diff_count) as total_diff_count
+                FROM batch_task_items
+                WHERE task_id = ?
+            `).get(taskId);
 
-                        if (onProgress) {
-                            onProgress(taskId, progressData);
-                        }
-                    }
-                );
-
-                console.log(`✅ 批量对比完成: 成功 ${compareResult.successCount}/${compareResult.total}`);
-            }
-
-            const duration = (Date.now() - startTime) / 1000;
-
-            // 更新任务结果
-            const stmt = this.db.prepare(`
+            this.db.prepare(`
                 UPDATE batch_tasks 
-                SET status = 'completed',
+                SET status = 'completed', 
+                    completed_at = CURRENT_TIMESTAMP,
                     success = ?,
                     failed = ?,
                     duration = ?,
-                    results = ?,
-                    completed_at = CURRENT_TIMESTAMP
+                    avg_similarity = ?,
+                    total_diff_count = ?,
+                    results = ?
                 WHERE id = ?
-            `);
-
-            stmt.run(
-                screenshotResult.success,
-                screenshotResult.failed,
+            `).run(
+                stats.success || 0,
+                stats.failed || 0,
                 duration,
-                JSON.stringify({
-                    screenshot: screenshotResult,
-                    compare: compareResult
-                }),
+                stats.avg_similarity || 0,
+                stats.total_diff_count || 0,
+                JSON.stringify(results),
                 taskId
             );
 
-            console.log(`✅ 任务 ${taskId} 完成: 成功 ${screenshotResult.success}/${screenshotResult.total}`);
+            console.log(`✅ 标准化任务 ${taskId} 完成: 成功 ${stats.success}/${urls.length}`);
 
-            // 通过 WebSocket 广播完成状态
             wsServer.broadcastTaskUpdate(taskId, 'task:completed', {
                 taskId,
                 status: 'completed',
-                screenshot: screenshotResult,
-                compare: compareResult
+                duration,
+                compare: {
+                    successCount: stats.success || 0,
+                    failedCount: stats.failed || 0,
+                    totalCount: stats.total || 0,
+                    avgSimilarity: stats.avg_similarity || 0,
+                    totalDiffCount: stats.total_diff_count || 0,
+                    results: results
+                }
             });
 
-            if (onProgress) {
-                onProgress(taskId, {
-                    status: 'completed',
-                    screenshot: screenshotResult,
-                    compare: compareResult
-                });
-            }
         } catch (error) {
-            console.error(`❌ 任务 ${taskId} 失败:`, error);
+            console.error(`❌ 任务 ${taskId} 严重故障:`, error);
             this.updateTaskStatus(taskId, 'failed', error.message);
-
-            wsServer.broadcastTaskUpdate(taskId, 'task:failed', {
-                taskId,
-                status: 'failed',
-                error: error.message
-            });
-
+            wsServer.broadcastTaskUpdate(taskId, 'task:failed', { taskId, error: error.message });
             throw error;
         }
     }
@@ -405,7 +461,42 @@ class BatchTaskService {
             return null;
         }
 
-        return this.parseTaskRow(row);
+        const task = this.parseTaskRow(row);
+
+        // 核心增强：无论 results 是否存在，始终从明细表实时拉取最新明细
+        // 这样可以确保即便是从缓存加载的主任务，也能获得包含完整 URL 和实时进度的 details
+        const itemsStmt = this.db.prepare('SELECT * FROM batch_task_items WHERE task_id = ? ORDER BY id ASC');
+        const items = itemsStmt.all(taskId);
+
+        if (items && items.length > 0) {
+            task.results = items.map(item => ({
+                url: item.url,
+                success: item.status === 'completed',
+                status: item.status,
+                reportId: item.report_id,
+                similarity: item.similarity,
+                diffCount: item.diff_count,
+                screenshot_path: item.screenshot_path,
+                error: item.error_message,
+                completed_at: item.completed_at
+            }));
+
+            // 无论任务是否完成，都基于明细表重新校准统计量，防止主表字段更新延迟
+            task.success = items.filter(i => i.status === 'completed').length;
+            task.failed = items.filter(i => i.status === 'failed').length;
+
+            const completedItems = items.filter(i => i.status === 'completed' && i.similarity !== null);
+            if (completedItems.length > 0) {
+                // 如果主表的 total_diff_count 为 0 但明细有数据，优先使用累加值
+                const calculatedDiffs = completedItems.reduce((sum, i) => sum + (i.diff_count || 0), 0);
+                task.totalDiffCount = task.totalDiffCount || calculatedDiffs;
+
+                const totalSim = completedItems.reduce((sum, i) => sum + i.similarity, 0);
+                task.avgSimilarity = task.avgSimilarity || (totalSim / completedItems.length);
+            }
+        }
+
+        return task;
     }
 
     /**
@@ -505,7 +596,10 @@ class BatchTaskService {
             compareConfig: row.compare_config ? JSON.parse(row.compare_config) : null,
             aiModel: row.ai_model,
             avgSimilarity: row.avg_similarity,
-            totalDiffCount: row.total_diff_count
+            totalDiffCount: row.total_diff_count,
+            currentPhase: row.current_phase || (row.status === 'completed' ? 'finish' : 'init'),
+            progress: row.status === 'completed' ? 100 : (row.progress || 0),
+            stepText: row.step_text
         };
     }
 }

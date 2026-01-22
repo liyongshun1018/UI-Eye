@@ -159,13 +159,6 @@
              :fixes="reportData.fixes"
              @preview="openPreview"
            />
- 
-           <!-- CSS 预览弹窗 -->
-           <CSSPreviewModal
-             v-model:show="showPreviewModal"
-             :url="previewUrl"
-             :css="previewCss"
-           />
          </template>
       </div>
     </div>
@@ -192,7 +185,6 @@ import OverlayComparison from '@ui/components/report/comparison/OverlayCompariso
 import DiffHighlightComparison from '@ui/components/report/comparison/DiffHighlightComparison.vue'
 import DiffRegionsSection from '@ui/components/report/DiffRegionsSection.vue'
 import CSSFixesSection from '@ui/components/report/CSSFixesSection.vue'
-import CSSPreviewModal from '@ui/components/report/CSSPreviewModal.vue'
 
 // 路由与 Store
 const route = useRoute()
@@ -218,11 +210,6 @@ const showOriginalDiff = ref(false)
  * @type {import('vue').Ref<import('@core/types').DiffRegion | null>} 
  */
 const selectedRegion = ref(null)
- 
- // CSS 预览弹窗状态
- const showPreviewModal = ref(false)
- const previewUrl = ref('')
- const previewCss = ref('')
 
 /** 
  * 对比模式配置项汇总
@@ -266,14 +253,15 @@ const locateRegion = (region) => {
 }
 
 /**
-  * 业务逻辑：打开 CSS 效果预览弹窗
-  * @param {Object} fix - 包含 suggestedCss 的修复建议对象
-  */
- const openPreview = (fix) => {
-   previewUrl.value = reportData.value?.config?.url || ''
-   previewCss.value = fix.suggestedCss || ''
-   showPreviewModal.value = true
- }
+ * 业务逻辑：在新标签页打开原始地址进行人工预览
+ * @param {Object} fix - 包含 suggestedCss 的修复建议对象
+ */
+const openPreview = (fix) => {
+  const url = reportData.value?.config?.url
+  if (url) {
+    window.open(url, '_blank')
+  }
+}
  
  /**
   * 联动逻辑监听：

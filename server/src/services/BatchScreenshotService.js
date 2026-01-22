@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * 批量截图服务
+ * 批量截图服务 (Puppeteer 版)
  * 支持批量执行截图任务，可选使用登录状态
  */
 class BatchScreenshotService {
@@ -30,7 +30,7 @@ class BatchScreenshotService {
         const results = [];
 
         console.log(`\n${'='.repeat(60)}`);
-        console.log(`📸 批量截图任务开始`);
+        console.log(`📸 [Puppeteer] 批量截图任务开始`);
         console.log(`${'='.repeat(60)}`);
         console.log(`URL 数量: ${urls.length}`);
         console.log(`登录状态: ${domain || '无'}`);
@@ -38,43 +38,51 @@ class BatchScreenshotService {
         console.log(`${'='.repeat(60)}\n`);
 
         // 启动浏览器
-        const browser = await chromium.launch({
-            headless: options.headless !== false
+        const browser = await puppeteer.launch({
+            headless: options.headless !== false ? 'new' : false,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+            ]
         });
 
         try {
-            // 创建浏览器上下文
-            let context;
-            if (domain) {
-                const authStatePath = await this.authService.loadAuthState(domain);
-                context = await browser.newContext({
-                    storageState: authStatePath,
-                    viewport: options.viewport || { width: 375, height: 667 },
-                    userAgent: options.userAgent || 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15'
-                });
-                console.log(`🔐 已加载 ${domain} 的登录状态\n`);
-            } else {
-                context = await browser.newContext({
-                    viewport: options.viewport || { width: 375, height: 667 },
-                    userAgent: options.userAgent || 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15'
-                });
-            }
-
             // 确保截图目录存在
             await fs.mkdir(this.screenshotsDir, { recursive: true });
 
             // 批量截图
             for (let i = 0; i < urls.length; i++) {
                 const url = urls[i];
-                const page = await context.newPage();
+                const page = await browser.newPage();
 
                 try {
                     const pageStartTime = Date.now();
                     console.log(`[${i + 1}/${urls.length}] 正在截图: ${url}`);
 
+                    // 设置视口
+                    const vWidth = options.viewportWidth || 375;
+                    const vHeight = options.viewportHeight || 667;
+                    const dsf = options.deviceScaleFactor || 1;
+
+                    await page.setViewport({
+                        width: vWidth,
+                        height: vHeight,
+                        deviceScaleFactor: dsf
+                    });
+
+                    // 模拟 User-Agent
+                    await page.setUserAgent(options.userAgent || 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1');
+
+                    // 应用登录状态
+                    if (domain && this.authService) {
+                        await this.authService.applyAuthState(page, domain);
+                    }
+
                     // 访问页面
                     await page.goto(url, {
-                        waitUntil: options.waitUntil || 'networkidle',
+                        waitUntil: options.waitUntil || 'networkidle2', // Puppeteer 使用 networkidle2
                         timeout: options.timeout || 30000
                     });
 
@@ -88,7 +96,7 @@ class BatchScreenshotService {
 
                     // 等待额外时间（可选）
                     if (options.waitAfterLoad) {
-                        await page.waitForTimeout(options.waitAfterLoad);
+                        await new Promise(resolve => setTimeout(resolve, options.waitAfterLoad));
                     }
 
                     // 截图
@@ -122,7 +130,7 @@ class BatchScreenshotService {
                 } finally {
                     await page.close();
 
-                    // 调用进度回调，传入当前索引、总数、当前 URL 和最新的结果信息
+                    // 调用进度回调
                     if (options.onProgress) {
                         const lastResult = results[results.length - 1];
                         options.onProgress(results.length, urls.length, url, lastResult);
@@ -136,14 +144,12 @@ class BatchScreenshotService {
 
             // 输出统计信息
             console.log(`${'='.repeat(60)}`);
-            console.log(`📊 批量截图完成！`);
+            console.log(`📊 [Puppeteer] 批量截图完成！`);
             console.log(`${'='.repeat(60)}`);
             console.log(`总数: ${urls.length}`);
-            console.log(`成功: ${successCount} (${(successCount / urls.length * 100).toFixed(1)}%)`);
+            console.log(`成功: ${successCount}`);
             console.log(`失败: ${failedCount}`);
             console.log(`总耗时: ${totalDuration}s`);
-            console.log(`平均耗时: ${(totalDuration / urls.length).toFixed(2)}s/页`);
-            console.log(`截图目录: ${this.screenshotsDir}`);
             console.log(`${'='.repeat(60)}\n`);
 
             return {
@@ -162,14 +168,13 @@ class BatchScreenshotService {
 
     /**
      * 生成截图文件名
-     * @param {string} url - URL
-     * @param {number} index - 索引
-     * @returns {string} 文件名
+     * 修复：移除路径中的点号,避免 .html 等扩展名导致静态资源服务器解析错误
      */
     generateFilename(url, index) {
         try {
             const urlObj = new URL(url);
-            const pathname = urlObj.pathname.replace(/\//g, '_') || '_home';
+            // 将路径中的斜杠和点号都替换为下划线,避免文件名中包含 .html 等扩展名
+            const pathname = urlObj.pathname.replace(/[\/\.]/g, '_') || '_home';
             const timestamp = Date.now();
             return `${String(index + 1).padStart(2, '0')}_${urlObj.hostname}${pathname}_${timestamp}.png`;
         } catch {

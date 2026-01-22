@@ -3,11 +3,8 @@
  * 用于批量任务的设计稿上传
  */
 <template>
-  <div class="design-upload">
-    <div class="section-header">
-      <h3 class="section-title">设计稿配置</h3>
-      <p class="section-desc">上传设计稿用于视觉对比</p>
-    </div>
+  <div class="design-upload-wrapper">
+    <!-- 移除冗余 header，由父组件 glass-card 统一控制 -->
 
     <div class="design-mode">
       <label class="mode-label">设计稿模式</label>
@@ -23,6 +20,7 @@
             :checked="modelValue.mode === mode.value"
             @change="handleModeChange(mode.value)"
           />
+          <div class="mode-indicator"></div>
           <div class="mode-content">
             <svg class="mode-icon" viewBox="0 0 1024 1024" width="20" height="20">
               <path :d="mode.icon" fill="currentColor"></path>
@@ -172,9 +170,13 @@ const handleModeChange = (mode) => {
  * @param {any} response - 服务端返回的数据
  */
 const handleUploadSuccess = (file, response) => {
+  let url = response.data?.url || response.url || response.path
+  // 清洗 URL，防止双斜杠产生
+  if (url) url = url.replace(/\/+/g, '/')
+  
   emit('update:modelValue', {
     ...props.modelValue,
-    designSource: response.url || response.path
+    designSource: url
   })
 }
 
@@ -183,7 +185,10 @@ const handleUploadSuccess = (file, response) => {
  */
 const handleMultiUploadSuccess = (url, response) => {
   const newMap = { ...props.modelValue.urlDesignMap }
-  newMap[url] = response.url || response.path
+  let designUrl = response.data?.url || response.url || response.path
+  if (designUrl) designUrl = designUrl.replace(/\/+/g, '/')
+  
+  newMap[url] = designUrl
   emit('update:modelValue', {
     ...props.modelValue,
     urlDesignMap: newMap
@@ -231,29 +236,10 @@ const handleReupload = () => {
 </script>
 
 <style scoped>
-.design-upload {
+.design-upload-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.section-header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.section-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-}
-
-.section-desc {
-  margin: 0;
-  font-size: 14px;
-  color: #999;
+  gap: 24px;
 }
 
 .design-mode {
@@ -263,40 +249,63 @@ const handleReupload = () => {
 }
 
 .mode-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .mode-options {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 16px;
 }
 
 .mode-option {
   position: relative;
   display: flex;
   padding: 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 8px;
+  padding-left: 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  background: white;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 .mode-option:hover {
-  border-color: #1677ff;
-  background: #f0f7ff;
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .mode-option.active {
-  border-color: #1677ff;
-  background: #e6f4ff;
+  border-color: var(--accent-primary);
+  border-width: 2px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.2);
 }
 
 .mode-option input[type="radio"] {
   position: absolute;
   opacity: 0;
+}
+
+.mode-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  transition: all 0.3s;
+}
+
+.mode-option.active .mode-indicator {
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.5);
 }
 
 .mode-content {
@@ -308,29 +317,34 @@ const handleReupload = () => {
 
 .mode-icon {
   flex-shrink: 0;
-  color: #1677ff;
+  color: var(--accent-primary);
+  background: white;
+  padding: 8px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-xs);
 }
 
 .mode-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .mode-name {
   font-size: 14px;
-  font-weight: 500;
-  color: #333;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .mode-desc {
-  font-size: 12px;
-  color: #999;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
 }
 
 .upload-section {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .upload-placeholder {
@@ -338,41 +352,49 @@ const handleReupload = () => {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 40px;
-  color: #1677ff;
-  border: 2px dashed #d9d9d9;
-  border-radius: 8px;
-  background: #fafafa;
+  padding: 48px;
+  color: var(--accent-primary);
+  border: 2px dashed var(--border-color);
+  border-radius: 16px;
+  background: #f8fafc;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .upload-placeholder:hover {
-  border-color: #1677ff;
+  border-color: var(--accent-primary);
+  background: white;
 }
 
 .upload-placeholder p {
   margin: 0;
   font-size: 14px;
-  color: #666;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .upload-placeholder .hint {
   font-size: 12px;
-  color: #999;
+  font-weight: 400;
+  color: var(--text-tertiary);
 }
 
 .preview-container {
   position: relative;
   display: inline-block;
-  max-width: 400px;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
 }
 
 .preview-image {
   width: 100%;
   height: auto;
-  border-radius: 8px;
   display: block;
+  max-height: 400px;
+  object-fit: contain;
+  background: #f1f5f9;
 }
 
 .preview-overlay {
@@ -384,10 +406,10 @@ const handleReupload = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.3s;
 }
 
 .preview-container:hover .preview-overlay {
@@ -395,17 +417,10 @@ const handleReupload = () => {
 }
 
 .multi-upload-section {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 20px;
-  border: 1px solid #e5e7eb;
-}
-
-.empty-hint {
-  text-align: center;
-  color: #9ca3af;
-  padding: 20px;
-  font-size: 14px;
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
 }
 
 .url-design-list {
@@ -420,8 +435,14 @@ const handleReupload = () => {
   align-items: center;
   padding: 12px 16px;
   background: white;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.url-design-item:hover {
+  box-shadow: var(--shadow-xs);
+  border-color: var(--accent-primary);
 }
 
 .url-name {

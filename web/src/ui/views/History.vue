@@ -227,15 +227,19 @@ const deleteReport = async (id) => {
   if (!confirmed) return
   
   try {
-    // 这里异步发起删除请求 (待后端接口对齐)
-    // await deleteReportById(id)
+    // 调用后端物理删除接口
+    const res = await compareAPI.deleteReport(id)
     
-    // 前端直接乐观更新列表
-    reports.value = reports.value.filter(r => r.id !== id)
-    
-    // 若当前页删空，则自动跳回上一页
-    if (paginatedReports.value.length === 0 && currentPage.value > 1) {
-      currentPage.value--
+    if (res.success) {
+      // 只有后端成功后才更新前端列表
+      reports.value = reports.value.filter(r => r.id !== id)
+      
+      // 若当前页删空，则自动跳回上一页
+      if (paginatedReports.value.length === 0 && currentPage.value > 1) {
+        currentPage.value--
+      }
+    } else {
+      showError(res.message || '删除请求被服务器拒绝')
     }
   } catch (err) {
     console.error('删除操作失败:', err)

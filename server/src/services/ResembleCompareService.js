@@ -20,7 +20,7 @@ class ResembleCompareService {
     this.options = {
       ignoreAntialiasing: options.ignoreAntialiasing !== false, // 默认忽略抗锯齿
       ignoreColors: options.ignoreColors || false,
-      scaleToSameSize: options.scaleToSameSize !== false,
+      scaleToSameSize: options.scaleToSameSize === true, // 默认不缩放，确保 1:1 对齐
       ...options
     }
   }
@@ -82,7 +82,7 @@ class ResembleCompareService {
       return {
         similarity: parseFloat((100 - parseFloat(result.misMatchPercentage)).toFixed(2)),
         diffPixels,
-        totalPixels,
+        totalPixels: result.width * result.height,
         width: result.width,
         height: result.height,
         diffBounds: result.diffBounds,
@@ -91,6 +91,7 @@ class ResembleCompareService {
           path: diffImagePath,
           url: getPublicUrl('REPORTS', path.basename(diffImagePath))
         },
+        diffRegions: this.getDiffRegions(result.diffBounds),
         rawData: result.rawMisMatchPercentage
       }
     } catch (error) {
@@ -105,9 +106,8 @@ class ResembleCompareService {
    * @returns {number} 差异像素数
    */
   calculateDiffPixels(result) {
-    if (result.dimensionDifference) return 0
     const totalPixels = result.width * result.height
-    return Math.round(totalPixels * result.rawMisMatchPercentage / 100)
+    return Math.round(totalPixels * parseFloat(result.misMatchPercentage) / 100)
   }
 
   /**

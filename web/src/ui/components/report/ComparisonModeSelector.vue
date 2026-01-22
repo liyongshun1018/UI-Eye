@@ -1,7 +1,10 @@
 <template>
   <div class="comparison-mode-selector">
-    <h2 class="section-title">{{ title }}</h2>
-    <div class="mode-switcher">
+    <div class="section-title-group">
+      <span class="title-icon">👁️</span>
+      <h2 class="section-title">{{ title }}</h2>
+    </div>
+    <div class="mode-switcher-pill">
       <button
         v-for="mode in modes"
         :key="mode.value"
@@ -9,7 +12,8 @@
         :class="{ active: modelValue === mode.value }"
         @click="$emit('update:modelValue', mode.value)"
       >
-        {{ mode.icon }} {{ mode.label }}
+        <span class="btn-icon">{{ mode.icon }}</span>
+        <span class="btn-label">{{ mode.label }}</span>
       </button>
     </div>
   </div>
@@ -45,61 +49,108 @@ defineEmits(['update:modelValue'])
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
+  width: 100%;
+  overflow: visible;
+}
+
+.section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.title-icon {
+  font-size: 1.25rem;
 }
 
 .section-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
-.mode-switcher {
+/* 仿分段选择器样式的药丸容器 */
+.mode-switcher-pill {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 14px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  gap: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+  flex-shrink: 1;
+}
+
+.mode-switcher-pill::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
 }
 
 .mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
-  background: var(--bg-secondary);
-  border: 2px solid transparent;
-  border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
   color: var(--text-secondary);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mode-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .mode-btn.active {
-  background: var(--accent-primary);
-  color: white;
-  border-color: var(--accent-primary);
+  background: white;
+  color: var(--accent-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
-@media (max-width: 768px) {
+.btn-icon {
+  font-size: 1.1rem;
+}
+
+@media (max-width: 1024px) {
+  .comparison-mode-selector {
+    justify-content: center;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 640px) {
   .comparison-mode-selector {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
   
-  .mode-switcher {
-    width: 100%;
+  .section-title-group {
+    justify-content: center;
+  }
+
+  .mode-switcher-pill {
+    justify-content: flex-start;
   }
   
   .mode-btn {
     flex: 1;
-    min-width: 0;
+    justify-content: center;
+    padding: 8px 12px;
   }
 }
 </style>

@@ -57,6 +57,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
         });
         sendResponse({ status: "visual_status_updated" });
+    } else if (message.type === "CAPTURE_VISIBLE_PART") {
+        const windowId = sender.tab ? sender.tab.windowId : null;
+        chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (dataUrl) => {
+            if (chrome.runtime.lastError) {
+                const errMsg = chrome.runtime.lastError.message;
+                console.error("[UI-Eye] Capture Error:", errMsg);
+                sendResponse({ error: errMsg, dataUrl: null });
+            } else {
+                sendResponse({ dataUrl });
+            }
+        });
+        return true; // 保持异步
+    } else if (message.type === "CLEAR_CACHE") {
+        lastCaptureCache = null;
+        sendResponse({ status: "cache_cleared" });
     }
     return true;
 });

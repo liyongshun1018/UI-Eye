@@ -88,7 +88,7 @@ class CompareService {
             result = { ...result, ...engineResult }
 
             // 智能分析环节：如果存在差异且开启了聚类功能
-            if (config.enableClustering && result.diffPixels > 0) {
+            if (config.enableClustering && (result.diffPixels > 0 || result.similarity < 100)) {
                 try {
                     // 2. 利用聚类算法从差异图中提取语义化区域 (如：导航栏偏离、文字错位)
                     const diffRegions = await this.clusteringService.analyzeDiffRegions(result.diffImage.path)
@@ -131,14 +131,15 @@ class CompareService {
             const meta1 = await sharp(path1).metadata()
             const meta2 = await sharp(path2).metadata()
 
-            // 选取较小的宽高作为基准，避免放大导致的模糊失真影响对比精度
-            const targetWidth = Math.min(meta1.width, meta2.width)
-            const targetHeight = Math.min(meta1.height, meta2.height)
+            // 关键改动：不再执行缩放 (Scaling)，改用补全 (Padding)
+            // 选取较大的宽高作为基准，确保物理像素 1:1 保持，不足部分留白/置空
+            const targetWidth = Math.max(meta1.width, meta2.width)
+            const targetHeight = Math.max(meta1.height, meta2.height)
 
-            console.log(`[对比服务] 正在执行尺寸归一化: ${targetWidth}x${targetHeight}`)
+            console.log(`[对比服务] 正在执行 1:1 尺寸补全: ${targetWidth}x${targetHeight} (无损对齐)`)
 
-            const buffer1 = await this.resizeImage(path1, targetWidth, targetHeight)
-            const buffer2 = await this.resizeImage(path2, targetWidth, targetHeight)
+            const buffer1 = await this.normalizeImage(path1, targetWidth, targetHeight)
+            const buffer2 = await this.normalizeImage(path2, targetWidth, targetHeight)
 
             const img1 = PNG.sync.read(buffer1)
             const img2 = PNG.sync.read(buffer2)
@@ -151,13 +152,20 @@ class CompareService {
     }
 
     /**
-     * 内部方法：使用 Sharp 执行高效图像缩放
+     * 内部方法：使用 Sharp 执行 1:1 无损对齐（不缩放，仅扩展边界）
      */
-    async resizeImage(imagePath, width, height) {
+    async normalizeImage(imagePath, targetWidth, targetHeight) {
+        const metadata = await sharp(imagePath).metadata();
+        const extendBottom = targetHeight - metadata.height;
+        const extendRight = targetWidth - metadata.width;
+
         return await sharp(imagePath)
-            .resize(width, height, {
-                fit: 'cover',   // 填充模式
-                position: 'top' // 从顶部对齐，适合网页长图
+            .extend({
+                top: 0,
+                left: 0,
+                bottom: Math.max(0, extendBottom),
+                right: Math.max(0, extendRight),
+                background: { r: 0, g: 0, b: 0, alpha: 0 } // 透明填充
             })
             .png()
             .toBuffer()
@@ -289,8 +297,8 @@ class CompareService {
      * 内部方法：将生成的差异图保存到本地磁盘
      */
     async saveDiffImage(diff) {
-        const timestamp = Date.now()
-        const filename = `diff-${timestamp}.png`
+        const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+        const filename = `diff-${uniqueId}.png`
         const filepath = path.join(__dirname, '../../data/reports', filename)
 
         await new Promise((resolve, reject) => {

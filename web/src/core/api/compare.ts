@@ -4,7 +4,7 @@
  * @description 该模块封装了单个页面的"即时对比"接口逻辑，支持设计稿上传、远程图片获取、开启对比及报告检索。
  * 统一使用 @core/utils/request 作为底层请求引擎。
  */
-import { get, post, upload } from '@core/utils/request'
+import { get, post, upload, del } from '@core/utils/request'
 import type { CompareConfig, CompareReport, UploadResponse, LanhuDesignResponse, ApiResponse } from '@core/types'
 
 export const compareAPI = {
@@ -51,5 +51,13 @@ export const compareAPI = {
      */
     getReports: (params?: { limit?: number; offset?: number }) => {
         return get<ApiResponse<CompareReport[]>>('/reports', params)
+    },
+
+    /**
+     * 物理删除指定的视觉对比报告
+     * @param {string} id 
+     */
+    deleteReport: (id: string) => {
+        return del<ApiResponse>(`/report/${id}`)
     }
 }

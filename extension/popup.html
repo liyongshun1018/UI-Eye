@@ -16,9 +16,9 @@
         }
 
         body {
-            width: 420px;
+            width: 450px;
             margin: 0;
-            padding: 12px;
+            padding: 8px 12px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: var(--gray-bg);
             color: var(--text);
@@ -29,8 +29,8 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
             border-bottom: 1px solid #eef2f6;
         }
 
@@ -41,7 +41,7 @@
         }
 
         .header h1 {
-            font-size: 16px;
+            font-size: 15px;
             margin: 0;
             color: #1a1a1a;
             letter-spacing: -0.5px;
@@ -56,7 +56,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             transition: all 0.3s;
         }
 
@@ -69,15 +69,16 @@
             background: white;
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 10px;
+            padding: 8px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+            min-width: 0;
         }
 
         .card-title {
-            font-size: 12px;
+            font-size: 11px;
             color: #64748b;
             font-weight: 600;
             text-align: center;
@@ -87,42 +88,33 @@
         .preview-area {
             position: relative;
             width: 100%;
+            min-height: 250px;
+            max-height: 320px;
+            /* 进一步压缩高度，确保底部不溢出 */
             border: 2px dashed #e2e8f0;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: auto;
-            /* 允许滚动 */
             background: #f1f5f9;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* 动态比例控制器（微调高度以适配 420px 宽度） */
-        .preview-area.ratio-phone {
+        /* 关键优化：当有图片时，切换为 block 布局，确保图片 100% 铺满而不被 flex 排挤 */
+        .preview-area:has(img) {
+            display: block;
+            border-style: solid;
+        }
+
+        /* 手机/平板模式下默认比例（仅在未上传图片时起占位作用） */
+        .preview-area:not(:has(img)).ratio-phone {
             aspect-ratio: 9 / 16;
-            height: 280px;
+            height: 320px;
         }
 
-        .preview-area.ratio-pad {
-            aspect-ratio: 3 / 4;
-            height: 240px;
-        }
-
-        /* 动态比例控制器（微调高度以适配 420px 宽度） */
-        .preview-area.ratio-phone {
-            aspect-ratio: 9 / 16;
-            height: 260px;
-        }
-
-        .preview-area.ratio-pad {
-            aspect-ratio: 3 / 4;
-            height: 220px;
-        }
-
-        .preview-area.ratio-pc {
+        .preview-area:not(:has(img)).ratio-pc {
             aspect-ratio: 16 / 9;
-            height: 180px;
         }
 
         .preview-area:hover {
@@ -130,32 +122,41 @@
             background: #f8fafc;
         }
 
+        .upload-placeholder {
+            text-align: center;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
         .preview-area img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
+            width: 100%;
+            height: auto;
+            display: block;
             border-radius: 4px;
             flex-shrink: 0;
         }
 
-        /* PC 模式下取消宽度限制，允许左右滚动看全 */
-        body.ratio-pc .preview-area img {
-            max-width: none;
-            height: 95%;
-            /* 填充高度 */
-            margin-left: 0;
-            /* 确保从左侧开始滚动 */
+        /* 手机/平板模式下，如果图片很长，允许向上对齐以便滚动查看 */
+        .preview-area:has(img) {
+            align-items: flex-start;
         }
 
-        body.ratio-pc .preview-area {
+        /* PC 模式下，有图片时取消宽度限制，允许左右滚动看全 */
+        body.ratio-pc .preview-area:has(img) img {
+            width: auto;
+            max-width: none;
+            height: 95%;
+        }
+
+        body.ratio-pc .preview-area:has(img) {
             justify-content: flex-start;
-            /* 滚动模式下靠左对齐 */
             padding-left: 5px;
+            align-items: center;
         }
 
         .btn {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             border-radius: 8px;
             border: none;
             background: var(--primary);
@@ -181,7 +182,7 @@
         }
 
         .btn-secondary {
-            padding: 5px 10px;
+            padding: 4px 8px;
             border-radius: 6px;
             border: 1px solid #e2e8f0;
             background: white;
@@ -210,8 +211,8 @@
         }
 
         #result-area {
-            margin-top: 16px;
-            padding: 16px;
+            margin-top: 8px;
+            padding: 12px;
             background: #fff;
             border-radius: 12px;
             border: 1px solid var(--border);
@@ -223,9 +224,9 @@
         .device-selector {
             display: flex;
             background: #e2e8f0;
-            padding: 3px;
+            padding: 2px;
             border-radius: 8px;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
             gap: 2px;
         }
 
@@ -308,7 +309,7 @@
         }
 
         .footer {
-            margin-top: 20px;
+            /* margin-top: 20px; */
             padding-top: 12px;
             border-top: 1px solid #eef2f6;
             text-align: center;
@@ -361,7 +362,6 @@
 
     <div class="device-selector">
         <button class="device-tab active" data-ratio="ratio-phone">📱 手机</button>
-        <button class="device-tab" data-ratio="ratio-pad"> tablet 平板</button>
         <button class="device-tab" data-ratio="ratio-pc">💻 电脑</button>
     </div>
 

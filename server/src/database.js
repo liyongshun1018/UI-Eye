@@ -80,8 +80,8 @@ export function createReport(report) {
     const db = getDatabase()
 
     const stmt = db.prepare(`
-        INSERT INTO reports (id, timestamp, config, status, similarity, diff_pixels, total_pixels, images, fixes, error, progress, step_text)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO reports (id, timestamp, config, status, similarity, diff_pixels, total_pixels, images, diff_image, diff_regions, fixes, error, progress, step_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     stmt.run(
@@ -93,6 +93,8 @@ export function createReport(report) {
         report.diffPixels || null,
         report.totalPixels || null,
         report.images ? JSON.stringify(report.images) : null,
+        report.diffImage ? JSON.stringify(report.diffImage) : null,
+        report.diffRegions ? JSON.stringify(report.diffRegions) : null,
         report.fixes ? JSON.stringify(report.fixes) : null,
         report.error || null,
         report.progress || 0,
@@ -242,6 +244,18 @@ export function deleteOldReports(days = 7) {
 }
 
 /**
+ * 根据 ID 物理删除单个对比报告
+ * @param {string} id - 报告 ID
+ * @returns {number} 删除的记录数（1 表示成功，0 表示未找到）
+ */
+export function deleteReport(id) {
+    const db = getDatabase()
+    const stmt = db.prepare('DELETE FROM reports WHERE id = ?')
+    const result = stmt.run(id)
+    return result.changes
+}
+
+/**
  * 解析数据库行为报告对象
  * @param {object} row - 数据库行
  * @returns {object} 报告对象
@@ -269,20 +283,26 @@ function parseReportRow(row) {
         // 1. 如果已经是完整的公网 HTTP 链接，不再重复处理
         if (url.startsWith('http')) return url
 
+        // 标准化路径分隔符
+        const normalizedUrl = url.replace(/\\/g, '/')
         // 提取文件名，忽略具体目录层级
         const filename = path.basename(url)
 
         // 2. 特征工程：根据路径中的关键标识，自动匹配对应的 Web 前缀
-        if (url.includes('reports')) return `/reports/${filename}`
-        if (url.includes('screenshots/batch')) return `/api/batch/screenshots/${filename}`
+        // 优先检查批量截图特征（最具体的匹配）
+        if (normalizedUrl.includes('screenshots/batch') || normalizedUrl.includes('/batch/')) {
+            return `/api/batch/screenshots/${filename}`
+        }
+
+        if (normalizedUrl.includes('reports')) return `/reports/${filename}`
 
         // 如果文件名带有插件导出的特征词，则归入上传目录
-        if (url.includes('uploads') || url.includes('actual-') || url.includes('design-')) {
+        if (normalizedUrl.includes('uploads') || normalizedUrl.includes('actual-') || normalizedUrl.includes('design-')) {
             return `/uploads/${filename}`
         }
 
         // 3. 容错处理：如果带了斜杠前缀且属于合法的静态资源路径，直接放行
-        if (url.startsWith('/') && (url.includes('/uploads/') || url.includes('/reports/'))) {
+        if (url.startsWith('/') && (url.includes('/uploads/') || url.includes('/reports/') || url.includes('/api/batch/screenshots/'))) {
             return url
         }
 

@@ -62,24 +62,28 @@ export const getPublicUrl = (type, filename) => {
 };
 
 /**
- * 解析各种来源的设计稿路径，返回物理路径
- * @param {string} designSource - 来源（可能是文件名、URL 或路径）
+ * 解析各种来源的设计稿或截图路径，返回物理路径
+ * @param {string} source - 来源（可能是文件名、URL 或路径）
  * @returns {string} 物理路径
  */
-export const resolveDesignPath = (designSource) => {
-    if (!designSource) return null;
+export const resolveDesignPath = (source) => {
+    if (!source) return null;
 
-    // 1. 如果是以 /uploads/ 开头的 Web 访问路径
-    // 注意：在 Mac/Linux 下，/uploads 会被 path.isAbsolute 识别为绝对路径，因此必须先处理
-    if (designSource.startsWith('/uploads/')) {
-        return path.join(DIRS.UPLOADS, path.basename(designSource));
+    // 1. 处理 Web 访问路径
+    if (source.startsWith('/uploads/')) {
+        return path.join(DIRS.UPLOADS, path.basename(source));
+    }
+
+    // 处理批量截图 URL
+    if (source.startsWith('/api/batch/screenshots/')) {
+        return path.join(DIRS.BATCH_SCREENSHOTS, path.basename(source));
     }
 
     // 2. 如果已经是物理磁盘上的绝对路径
-    if (path.isAbsolute(designSource)) return designSource;
+    if (path.isAbsolute(source)) return source;
 
-    // 3. 如果只是包含后缀的文件名
-    return path.join(DIRS.UPLOADS, designSource);
+    // 3. 如果只是包含后缀的文件名，默认归类到上传目录
+    return path.join(DIRS.UPLOADS, source);
 };
 
 /**
@@ -92,18 +96,36 @@ export const resolveDesignPath = (designSource) => {
 export const normalizeToPublicUrl = (filePath) => {
     if (!filePath) return null;
 
-    // 1. 如果已经是完整的外部 HTTP/HTTPS 链接，直接保持原样返回
+    // 1. 如果已经是完整的外部 HTTP/HTTPS 链接，直接返回
     if (filePath.startsWith('http')) return filePath;
 
+    // 标准化路径分隔符，避免因为斜杠方向不同导致匹配失败
+    const normalizedPath = filePath.replace(/\\/g, '/');
     const filename = path.basename(filePath);
 
-    // 2. 特征工程：根据路径中包含的“特征目录名”来自动识别并匹配其所属的 Web Prefix
-    if (filePath.includes('reports')) return getPublicUrl('REPORTS', filename);
-    if (filePath.includes('screenshots/batch')) return getPublicUrl('BATCH_SCREENSHOTS', filename);
-    if (filePath.includes('uploads')) return getPublicUrl('UPLOADS', filename);
+    // 2. 增强匹配逻辑：使用更明确的子路径特征
+    if (normalizedPath.includes('/reports/') || normalizedPath.endsWith('/reports')) {
+        return getPublicUrl('REPORTS', filename);
+    }
+    if (normalizedPath.includes('/screenshots/batch/') || normalizedPath.includes('screenshots/batch')) {
+        return getPublicUrl('BATCH_SCREENSHOTS', filename);
+    }
+    if (normalizedPath.includes('/uploads/') || normalizedPath.includes('uploads/')) {
+        return getPublicUrl('UPLOADS', filename);
+    }
 
-    // 3. 容错回退逻辑：
-    // 如果是绝对路径但未匹配到上述已知目录，则维持原样（可能涉及后端内部私有处理）
-    // 如果是相对路径，出于安全和通用性考虑，默认按“上传目录”的前缀进行渲染
-    return path.isAbsolute(filePath) ? filePath : getPublicUrl('UPLOADS', filename);
+    // 3. 容错回退逻辑
+    // 如果是绝对路径且没有匹配到已知目录特征
+    if (path.isAbsolute(filePath)) {
+        // 尝试根据父目录名最后一次确认
+        const parts = normalizedPath.split('/');
+        const parentDir = parts[parts.length - 2];
+        if (parentDir === 'batch') return getPublicUrl('BATCH_SCREENSHOTS', filename);
+        if (parentDir === 'uploads') return getPublicUrl('UPLOADS', filename);
+        if (parentDir === 'reports') return getPublicUrl('REPORTS', filename);
+
+        return filePath;
+    }
+
+    return getPublicUrl('UPLOADS', filename);
 };

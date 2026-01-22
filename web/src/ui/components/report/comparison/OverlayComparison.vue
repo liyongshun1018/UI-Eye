@@ -5,12 +5,14 @@
         :src="designImage" 
         alt="设计稿" 
         class="base-layer" 
+        ref="baseImg"
         :style="{ transform: `scale(${zoomLevel})` }"
       />
       <img 
         :src="actualImage" 
         alt="实际页面" 
         class="overlay-layer"
+        ref="overlayImg"
         :style="{ 
           opacity: overlayOpacity,
           transform: `scale(${zoomLevel})`
@@ -66,17 +68,15 @@
  * 核心功能：将两张图片重叠放置，通过调节上层图片的透明度（Opacity），
  * 产生“重影”效果，帮助用户快速捕捉细微的位移、字号差异或颜色偏差。
  */
-import { ref } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
-/**
- * 组件属性定义
- * @property {string} designImage - 设计稿图片的 URL
- * @property {string} actualImage - 实际抓取的页面截图 URL
- */
-defineProps({
+const props = defineProps({
   designImage: String,
   actualImage: String
 })
+
+const baseImg = ref(null)
+const overlayImg = ref(null)
 
 // 响应式状态
 const overlayOpacity = ref(0.5) // 上层图片透明度 (0: 完全透明/看底层, 1: 完全不透明/看顶层)
@@ -115,11 +115,12 @@ const handleResetZoom = () => {
   background: #f8fafc;
   border-radius: var(--radius-md);
   padding: var(--spacing-lg);
-  min-height: 600px;
+  min-height: 400px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative; /* Ensure relative for absolute controls */
+  position: relative;
+  width: 100%;
 }
 
 .overlay-viewport {
@@ -127,26 +128,38 @@ const handleResetZoom = () => {
   background: white;
   border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
-  overflow: hidden;
-  display: inline-block;
-  margin-top: 48px; /* Make space for floating controls */
+  overflow: auto;
+  display: grid;
+  place-items: start center;
+  margin-top: 48px;
+  max-width: 100%;
+  /* 移除高度限制，依靠图片的物理高度支撑撑开，确保不被压缩 */
+  height: auto;
 }
 
 .base-layer {
+  grid-area: 1 / 1;
   display: block;
-  max-width: 100%;
+  /* 移除限制，确保原始尺寸渲染 */
+  width: auto;
   height: auto;
+  object-fit: none; /* 防止任何形式的拉伸 */
   transition: transform 0.3s ease;
+  transform-origin: top center;
+  z-index: 1;
 }
 
 .overlay-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  max-width: 100%;
+  grid-area: 1 / 1;
+  display: block;
+  /* 移除 max-width，允许 JS 强行同步尺寸 */
+  width: auto;
   height: auto;
+  object-fit: fill; /* 确保强制拉伸到基准图大小 */
   transition: opacity 0.3s ease, transform 0.3s ease;
   pointer-events: none;
+  z-index: 2;
+  transform-origin: top center;
 }
 
 .diff-controls {

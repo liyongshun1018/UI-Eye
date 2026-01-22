@@ -248,10 +248,38 @@ const validateFile = (file) => {
   }
 
   // 校验文件后缀/类型
-  if (props.accept !== '*' && !props.accept.includes(file.type)) {
-    file.status = 'error'
-    emit('error', file, new Error('文件类型不支持'))
-    return false
+  if (props.accept !== '*') {
+    const acceptTypes = props.accept.split(',').map(t => t.trim())
+    let isValid = false
+
+    for (const acceptType of acceptTypes) {
+      // 支持通配符，如 image/*
+      if (acceptType.includes('/*')) {
+        const baseType = acceptType.split('/')[0]
+        if (file.type.startsWith(baseType + '/')) {
+          isValid = true
+          break
+        }
+      }
+      // 支持扩展名，如 .png
+      else if (acceptType.startsWith('.')) {
+        if (file.name.toLowerCase().endsWith(acceptType.toLowerCase())) {
+          isValid = true
+          break
+        }
+      }
+      // 支持完整 MIME 类型，如 image/png
+      else if (file.type === acceptType) {
+        isValid = true
+        break
+      }
+    }
+
+    if (!isValid) {
+      file.status = 'error'
+      emit('error', file, new Error('文件类型不支持'))
+      return false
+    }
   }
 
   return true

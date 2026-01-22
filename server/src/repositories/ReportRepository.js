@@ -1,4 +1,4 @@
-import { getDatabase, createReport, updateReport, getReport, getReportList, deleteOldReports } from '../database.js'
+import { getDatabase, createReport, updateReport, getReport, getReportList, deleteOldReports, deleteReport } from '../database.js'
 
 /**
  * 报告数据仓库类（Repository 模式）
@@ -38,6 +38,16 @@ class ReportRepository {
     update(id, data) {
         console.log(`[报告仓库] 更新报告: ${id}`)
         updateReport(id, data)
+    }
+
+    /**
+     * 删除单条报告记录
+     * @param {string} id - 报告 ID
+     * @returns {number} 删除结果
+     */
+    delete(id) {
+        console.log(`[报告仓库] 物理删除报告: ${id}`)
+        return deleteReport(id)
     }
 
     /**

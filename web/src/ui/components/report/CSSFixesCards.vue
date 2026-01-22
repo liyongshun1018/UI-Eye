@@ -42,7 +42,7 @@
       <p v-if="fix.impact" class="fix-impact">{{ fix.impact }}</p>
       <div class="card-actions">
         <button class="btn btn-primary btn-sm" @click="$emit('preview', fix)">
-          <span class="icon">👁️</span> 效果预览
+          <span class="icon">👁️</span> 查看原页面
         </button>
         <button class="btn btn-secondary btn-sm" @click="$emit('copy', fix.suggestedCSS)">
           <span class="icon">📋</span> 复制代码

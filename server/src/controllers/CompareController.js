@@ -83,79 +83,26 @@ class CompareController {
      * @param {Object} config - 配置信息
      */
     async processCompareTask(reportId, config) {
-        console.log(`\n[对比控制器] 开始处理对比任务: ${reportId}`)
-        console.log('[对比控制器] 配置:', JSON.stringify(config, null, 2))
+        // 重构：直接调用统一的原子执行任务服务
+        // 注意：单次对比不传递 taskId，内部会使用时间戳作为 ID
+        // 为保持旧接口兼容，我们这里把 reportId 作为 fallback 传递（虽然 execute 内部会处理）
+        const CompareTaskService = (await import('../services/CompareTaskService.js')).default;
 
         try {
-            // 步骤 1: 准备环境
-            this.reportRepo.update(reportId, { progress: 10, stepText: '🔍 正在初始化捕获引擎并访问目标页面...' })
-
-            // 步骤 1.1: 截取实际页面
-            console.log('\n[1/4] 截取实际页面...')
-            const actualScreenshot = await this.captureService.capture(config.url, config.viewport)
-            this.reportRepo.update(reportId, { progress: 30, stepText: '📸 页面捕获成功，正在准备设计稿...' })
-
-            // 步骤 2: 准备设计稿路径
-            console.log('\n[2/4] 准备设计稿...')
-            const designPath = resolveDesignPath(config.designSource)
-
-            // 验证设计稿文件是否存在
-            if (!fs.existsSync(designPath)) {
-                throw new Error(`设计稿文件不存在: ${designPath}。请重新上传设计稿。`)
-            }
-
-            // 步骤 3: 图像对比
-            this.reportRepo.update(reportId, { progress: 50, stepText: '⚖️ 正在执行像素级高保真差异对比...' })
-            console.log('\n[3/4] 执行像素级对比...')
-            const compareResult = await this.compareService.compare(
-                designPath,
-                actualScreenshot.path,
-                {
-                    threshold: config.options?.tolerance ? config.options.tolerance / 100 : 0.1
+            await CompareTaskService.execute({
+                ...config,
+                id: reportId // 强制覆盖 ID 保持前端引用一致
+            }, {
+                onProgress: (data) => {
+                    // WebSocket 广播已在 reportRepo.update 中通过 Hook 处理（或手动触发）
+                    // 这里的 progress 已经由 CompareTaskService 同步到数据库
+                    console.log(`[原子代理] 任务 ${reportId} 进度: ${data.progress}% - ${data.stepText}`);
                 }
-            )
-
-            // 步骤 4: AI 分析
-            this.reportRepo.update(reportId, { progress: 80, stepText: '🧠 人工智能正在深度诊断视觉差异原因...' })
-            console.log('\n[4/4] AI 分析差异...')
-            const fixes = await this.aiService.analyze(
-                {
-                    design: designPath,
-                    actual: actualScreenshot.path,
-                    diff: compareResult.diffImage.path
-                },
-                compareResult,
-                config.aiModel || 'siliconflow'
-            )
-
-            // 更新报告为完成状态
-            this.reportRepo.update(reportId, {
-                status: 'completed',
-                progress: 100,
-                stepText: '✅ 报告分析已完成！',
-                similarity: compareResult.similarity,
-                diffPixels: compareResult.diffPixels,
-                totalPixels: compareResult.totalPixels,
-                images: {
-                    design: normalizeToPublicUrl(config.designSource),
-                    actual: actualScreenshot.url,
-                    diff: compareResult.diffImage.url
-                },
-                diffRegions: compareResult.diffRegions,
-                diffImage: compareResult.diffImage,
-                fixes
-            })
-
-            console.log(`\n✅ 对比任务完成!`)
-            console.log(`相似度: ${compareResult.similarity}%`)
-            console.log(`修复建议: ${fixes.length} 项`)
+            });
+            console.log(`\n✅ 对比任务委派完成: ${reportId}`);
         } catch (error) {
-            console.error('\n❌ 对比任务失败:', error)
-            this.reportRepo.update(reportId, {
-                status: 'failed',
-                error: error.message
-            })
-            throw error
+            console.error('\n❌ 对比代理任务失败:', error);
+            throw error;
         }
     }
 
@@ -182,6 +129,30 @@ class CompareController {
             })
         } catch (error) {
             this.handleError(res, error, '获取报告失败')
+        }
+    }
+
+    /**
+     * 删除报告
+     */
+    async deleteReport(req, res) {
+        try {
+            const { id } = req.params
+            const deletedCount = this.reportRepo.delete(id)
+
+            if (deletedCount === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: '报告不存在或已被删除'
+                })
+            }
+
+            res.json({
+                success: true,
+                message: '报告删除成功'
+            })
+        } catch (error) {
+            this.handleError(res, error, '删除报告失败')
         }
     }
 

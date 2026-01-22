@@ -1,65 +1,107 @@
 /**
- * 对比配置组件
- * 配置对比引擎、AI模型等选项
+ * 对比配置组件（统一版本）
+ * 与 Compare.vue 保持完全一致的配置标准和 UI 风格
  */
 <template>
-  <div class="compare-config">
-    <div class="section-header">
-      <h3 class="section-title">对比配置</h3>
-      <p class="section-desc">配置视觉对比的引擎和选项</p>
-    </div>
-
-    <div class="config-form">
-      <div class="form-item">
-        <label class="form-label">对比引擎</label>
-        <div class="radio-group">
-          <label
-            v-for="engine in engines"
-            :key="engine.value"
-            :class="['radio-option', { active: modelValue.engine === engine.value }]"
+  <div class="compare-config-unified">
+    <div class="config-stack">
+      <!-- 1. Viewport 配置 -->
+      <div class="config-block">
+        <label class="config-label">1. 渲染视口 (Viewport)</label>
+        <div class="viewport-box-modern">
+          <select 
+            :value="selectedPreset" 
+            @change="handlePresetChange"
+            class="modern-select"
           >
-            <input
-              type="radio"
-              :value="engine.value"
-              :checked="modelValue.engine === engine.value"
-              @change="handleEngineChange(engine.value)"
+            <option v-for="preset in viewportPresets" :key="preset.name" :value="preset.name">
+              {{ preset.name }}
+            </option>
+          </select>
+          <div class="dimension-inputs">
+            <input 
+              v-model.number="localViewport.width" 
+              type="number" 
+              class="mini-input"
+              @input="handleViewportChange"
             />
-            <span class="radio-label">{{ engine.label }}</span>
-            <span class="radio-desc">{{ engine.desc }}</span>
-          </label>
+            <span class="x-sep">×</span>
+            <input 
+              v-model.number="localViewport.height" 
+              type="number" 
+              class="mini-input"
+              @input="handleViewportChange"
+            />
+          </div>
         </div>
       </div>
 
-      <div class="form-item">
-        <label class="form-label">AI 分析模型</label>
-        <div class="radio-group">
-          <label
-            v-for="model in aiModels"
-            :key="model.value"
-            :class="['radio-option', { active: modelValue.aiModel === model.value }]"
+      <!-- 2. AI 模型选择 -->
+      <div class="config-block mt-md">
+        <label class="config-label">2. AI 分析模型</label>
+        <div class="premium-select-wrapper">
+          <select 
+            :value="modelValue.aiModel" 
+            @change="handleAIModelChange"
+            class="premium-select"
           >
-            <input
-              type="radio"
-              :value="model.value"
-              :checked="modelValue.aiModel === model.value"
-              @change="handleAIModelChange(model.value)"
-            />
-            <span class="radio-label">{{ model.label }}</span>
-            <span class="radio-desc">{{ model.desc }}</span>
-          </label>
+            <option v-for="m in availableAiModels" :key="m.value" :value="m.value">
+              {{ m.name }}
+            </option>
+          </select>
+          <div class="select-chevron"></div>
         </div>
       </div>
 
-      <div class="form-item">
-        <label class="checkbox-wrapper">
-          <input
-            type="checkbox"
-            :checked="modelValue.ignoreAntialiasing"
-            @change="handleIgnoreAntialiasingChange"
-          />
-          <span class="checkbox-label">忽略抗锯齿差异</span>
-          <span class="checkbox-desc">忽略由抗锯齿引起的细微像素差异</span>
-        </label>
+      <!-- 3. 对比引擎动力 -->
+      <div class="config-block mt-md">
+        <label class="config-label">3. 对比引擎动力</label>
+        <div class="engine-cards-stack">
+          <div 
+            v-for="e in engines" 
+            :key="e.value"
+            class="engine-card-pill"
+            :class="{ active: modelValue.engine === e.value }"
+            @click="handleEngineChange(e.value)"
+            :title="e.description"
+          >
+            <span class="engine-icon">{{ e.icon }}</span>
+            <div class="engine-text-group">
+              <div class="engine-title-row">
+                <span class="engine-name">{{ e.name }}</span>
+                <span v-if="e.recommended" class="recommended-badge">推荐</span>
+              </div>
+              <span class="engine-desc-mini">{{ e.description }} · {{ e.scene }}</span>
+            </div>
+            <span class="engine-tag-mini" :class="e.value">{{ e.badge }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 智能选项 -->
+      <div class="config-block mt-md">
+        <div class="switches-column-modern">
+          <label class="modern-switch">
+            <input 
+              v-model="localIgnoreAntialiasing" 
+              type="checkbox" 
+              class="hidden-checkbox"
+              @change="handleIgnoreAntialiasingChange"
+            />
+            <span class="switch-ui"></span>
+            <span class="switch-label">忽略抗锯齿噪点</span>
+          </label>
+          <label class="modern-switch mt-xs">
+            <input 
+              v-model="localEnableSmartAlignment" 
+              type="checkbox" 
+              class="hidden-checkbox"
+              @change="handleSmartAlignmentChange"
+            />
+            <span class="switch-ui"></span>
+            <span class="switch-label">智能吸附/自动居中</span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
@@ -67,28 +109,24 @@
 
 <script setup>
 /**
- * 对比配置组件
+ * 对比配置组件（统一版本）
  * 
- * @description 用于配置视觉对比的核心参数，包括对比引擎的选择、AI 分析模型的指定以及像素级对比细节（如抗锯齿忽略）。
- * 
- * @typedef {Object} CompareConfig - 对比配置项
- * @property {string} engine - 使用的对比引擎: 'resemble' | 'pixelmatch'
- * @property {string} aiModel - 使用的 AI 分析模型: 'siliconflow' | 'openai' | 'none'
- * @property {boolean} ignoreAntialiasing - 是否忽略抗锯齿差异
- * 
- * @property {CompareConfig} modelValue - 组件绑定的配置数据 (v-model)
+ * @description 与 Compare.vue 保持完全一致的配置标准和 UI 风格
  */
-import { COMPARE_ENGINE, AI_MODEL } from '@core/constants'
+import { ref, watch } from 'vue'
+import { AI_MODELS } from '@core/config/constants'
+import { VIEWPORT_PRESETS } from '@core/config/constants'
 
 const props = defineProps({
-  // 对比配置对象
   modelValue: {
     type: Object,
     required: true,
     default: () => ({
       engine: 'resemble',
-      aiModel: 'none',
-      ignoreAntialiasing: true
+      aiModel: 'siliconflow',
+      ignoreAntialiasing: true,
+      enableSmartAlignment: true,
+      viewport: { width: 375, height: 667 }
     })
   }
 })
@@ -96,45 +134,120 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 /**
- * 可用的对比引擎选项
+ * Viewport 预设选项
  */
-const engines = [
-  {
-    value: COMPARE_ENGINE.RESEMBLE,
-    label: 'Resemble.js',
-    desc: '基于 Canvas 的快速对比，误差容忍度高，适合大多数 Web 页面'
-  },
-  {
-    value: COMPARE_ENGINE.PIXELMATCH,
-    label: 'PixelMatch',
-    desc: '极速、精确的像素点对比，适合对精度要求极高的静态图验证'
-  }
-]
+const viewportPresets = VIEWPORT_PRESETS
 
 /**
- * 可用的 AI 分析模型选项
+ * 本地 Viewport 状态
  */
-const aiModels = [
-  {
-    value: AI_MODEL.SILICONFLOW,
-    label: 'SiliconFlow (推荐)',
-    desc: '国内高速推理集群提供商，延迟低，适合快速生成视觉报告'
+const localViewport = ref({
+  width: props.modelValue.viewport?.width || 375,
+  height: props.modelValue.viewport?.height || 667
+})
+
+/**
+ * 当前选中的预设
+ */
+const selectedPreset = ref('iPhone SE')
+
+/**
+ * 本地智能选项状态
+ */
+const localIgnoreAntialiasing = ref(props.modelValue.ignoreAntialiasing ?? true)
+const localEnableSmartAlignment = ref(props.modelValue.enableSmartAlignment ?? true)
+
+/**
+ * 初始化时根据当前 viewport 匹配预设
+ */
+const initPreset = () => {
+  const current = props.modelValue.viewport || { width: 375, height: 667 }
+  const matched = viewportPresets.find(
+    p => p.width === current.width && p.height === current.height
+  )
+  if (matched) {
+    selectedPreset.value = matched.name
+  } else {
+    selectedPreset.value = '自定义'
+  }
+  localViewport.value = { ...current }
+}
+
+initPreset()
+
+/**
+ * 处理预设切换
+ */
+const handlePresetChange = (event) => {
+  const presetName = event.target.value
+  selectedPreset.value = presetName
+  
+  const preset = viewportPresets.find(p => p.name === presetName)
+  if (preset && preset.name !== '自定义') {
+    localViewport.value = {
+      width: preset.width,
+      height: preset.height
+    }
+    emitViewportUpdate()
+  }
+}
+
+/**
+ * 处理手动输入 viewport
+ */
+const handleViewportChange = () => {
+  selectedPreset.value = '自定义'
+  emitViewportUpdate()
+}
+
+/**
+ * 发送 viewport 更新
+ */
+const emitViewportUpdate = () => {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    viewport: { ...localViewport.value }
+  })
+}
+
+/**
+ * 可用的 AI 模型选项（使用统一的 AI_MODELS）
+ */
+const availableAiModels = Object.values(AI_MODELS)
+
+/**
+ * 可用的对比引擎选项（包含 ODiff）
+ */
+const engines = [
+  { 
+    value: 'resemble', 
+    name: 'Resemble.js', 
+    badge: '智能', 
+    icon: '🧠', 
+    description: '感知对比', 
+    scene: '通用/复杂背景', 
+    recommended: true 
   },
-  {
-    value: AI_MODEL.OPENAI,
-    label: 'OpenAI (GPT-4o)',
-    desc: '国际领先模型，语义理解能力最强，能更准确识别 UI 逻辑差异'
+  { 
+    value: 'pixelmatch', 
+    name: 'Pixelmatch', 
+    badge: '快速', 
+    icon: '🎯', 
+    description: '像素对比', 
+    scene: '静态/高保真' 
   },
-  {
-    value: AI_MODEL.NONE,
-    label: '不使用 AI 辅助',
-    desc: '仅展示像素级色值差异，不提供具体的 CSS 或结构化修复建议'
+  { 
+    value: 'odiff', 
+    name: 'ODiff', 
+    badge: '极速', 
+    icon: '⚡', 
+    description: '极致性能', 
+    scene: '超长图/大批量' 
   }
 ]
 
 /**
  * 切换对比引擎
- * @param {string} engine 
  */
 const handleEngineChange = (engine) => {
   emit('update:modelValue', {
@@ -145,181 +258,337 @@ const handleEngineChange = (engine) => {
 
 /**
  * 切换 AI 模型
- * @param {string} aiModel 
  */
-const handleAIModelChange = (aiModel) => {
+const handleAIModelChange = (event) => {
   emit('update:modelValue', {
     ...props.modelValue,
-    aiModel
+    aiModel: event.target.value
   })
 }
 
 /**
  * 切换抗锯齿忽略状态
- * @param {Event} event 
  */
-const handleIgnoreAntialiasingChange = (event) => {
+const handleIgnoreAntialiasingChange = () => {
   emit('update:modelValue', {
     ...props.modelValue,
-    ignoreAntialiasing: event.target.checked
+    ignoreAntialiasing: localIgnoreAntialiasing.value
+  })
+}
+
+/**
+ * 切换智能吸附状态
+ */
+const handleSmartAlignmentChange = () => {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    enableSmartAlignment: localEnableSmartAlignment.value
   })
 }
 </script>
 
 <style scoped>
-.compare-config {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+/* 对比配置组件样式（统一版本） - 与 Compare.vue 保持一致 */
+
+.compare-config-unified {
+  width: 100%;
 }
 
-.section-header {
+.config-stack {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1.25rem;
 }
 
-.section-title {
-  margin: 0;
-  font-size: 16px;
+.config-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.mt-md {
+  margin-top: 0.75rem;
+}
+
+.mt-xs {
+  margin-top: 0.5rem;
+}
+
+.config-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Viewport 选择器 */
+.viewport-box-modern {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.modern-select {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: #333;
-}
-
-.section-desc {
-  margin: 0;
-  font-size: 14px;
-  color: #999;
-}
-
-.config-form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.form-item {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.form-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
-.radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.radio-option {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 6px;
+  color: #1e293b;
+  background: #fff;
   cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.modern-select:hover {
+  border-color: #cbd5e1;
+}
+
+.modern-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.dimension-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.mini-input {
+  width: 50px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #1e293b;
+  background: #fff;
+  outline: none;
   transition: all 0.2s;
 }
 
-.radio-option:hover {
-  border-color: #1677ff;
-  background: #f0f7ff;
+.mini-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
-.radio-option.active {
-  border-color: #1677ff;
-  background: #e6f4ff;
+.x-sep {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #64748b;
 }
 
-.radio-option input[type="radio"] {
-  display: none;
-}
-
-.radio-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
-.radio-desc {
-  font-size: 12px;
-  color: #999;
-}
-
-.checkbox-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.checkbox-wrapper:hover {
-  border-color: #1677ff;
-  background: #f0f7ff;
-}
-
-.checkbox-wrapper input[type="checkbox"] {
-  display: none;
-}
-
-.checkbox-wrapper input[type="checkbox"]:checked + .checkbox-label::before {
-  background: #1677ff;
-  border-color: #1677ff;
-}
-
-.checkbox-wrapper input[type="checkbox"]:checked + .checkbox-label::after {
-  opacity: 1;
-}
-
-.checkbox-label {
+/* AI 模型下拉框 */
+.premium-select-wrapper {
   position: relative;
-  padding-left: 28px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
 }
 
-.checkbox-label::before {
-  content: '';
+.premium-select {
+  width: 100%;
+  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  background: #fff;
+  cursor: pointer;
+  appearance: none;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.premium-select:hover {
+  border-color: #cbd5e1;
+}
+
+.premium-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.select-chevron {
   position: absolute;
-  left: 0;
+  right: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  border: 2px solid #d9d9d9;
-  border-radius: 4px;
-  transition: all 0.2s;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #64748b;
+  pointer-events: none;
 }
 
-.checkbox-label::after {
+/* 引擎卡片堆叠 */
+.engine-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.engine-card-pill {
+  padding: 0.875rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  cursor: pointer;
+  background: #fff;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.engine-card-pill:hover {
+  border-color: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.15);
+}
+
+.engine-card-pill.active {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.2);
+}
+
+.engine-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.engine-text-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.engine-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.engine-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.recommended-badge {
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #fff;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.engine-desc-mini {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.engine-tag-mini {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-bottom-left-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: -2px 2px 4px rgba(0,0,0,0.02);
+}
+
+.engine-tag-mini.pixelmatch { 
+  background: #fee2e2; 
+  color: #b91c1c; 
+}
+
+.engine-tag-mini.resemble { 
+  background: #dbeafe; 
+  color: #1d4ed8; 
+}
+
+.engine-tag-mini.odiff { 
+  background: #fef3c7; 
+  color: #92400e; 
+}
+
+/* 开关样式 */
+.switches-column-modern {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #f1f5f9;
+  padding: 0.875rem 1rem;
+  border-radius: 12px;
+}
+
+.modern-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.hidden-checkbox {
+  display: none;
+}
+
+.switch-ui {
+  width: 38px;
+  height: 22px;
+  background: #cbd5e1;
+  border-radius: 100px;
+  position: relative;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.switch-ui::after {
   content: '';
   position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%) rotate(45deg);
-  width: 6px;
-  height: 10px;
-  border: 2px solid #fff;
-  border-top: none;
-  border-left: none;
-  opacity: 0;
-  transition: opacity 0.2s;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.checkbox-desc {
-  padding-left: 28px;
-  font-size: 12px;
-  color: #999;
+input:checked + .switch-ui {
+  background: #2563eb;
+}
+
+input:checked + .switch-ui::after {
+  left: 19px;
+}
+
+.switch-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
 }
 </style>
+

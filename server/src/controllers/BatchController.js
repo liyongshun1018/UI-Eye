@@ -51,12 +51,17 @@ class BatchController {
     async createTask(req, res) {
         try {
             const { name, urls, domain, options, script_id, designMode, designSource, urlDesignMap } = req.body
+
             if (!name || !urls || !Array.isArray(urls) || urls.length === 0) {
                 return res.status(400).json({
                     success: false,
                     message: '无效的任务数据：任务名称和 URL 列表不能为空'
                 })
             }
+
+            // 日志记录：用于排查设计稿参数丢失问题
+            console.log(`[批量控制器] 创建任务: ${name}, URL 数量: ${urls.length}`);
+            console.log(`[批量控制器] 设计配置: mode=${designMode}, source=${designSource ? 'YES' : 'NO'}, hasMap=${!!urlDesignMap}`);
 
             const taskId = this.batchTaskService.createTask(name, urls, domain, {
                 ...options,
@@ -65,6 +70,7 @@ class BatchController {
                 designSource,
                 urlDesignMap
             })
+
             res.json({
                 success: true,
                 data: { taskId },

@@ -47,7 +47,7 @@
                <button 
                  class="btn-icon btn-primary" 
                  @click="$emit('preview', fix)"
-                 title="效果预览"
+                 title="查看原页面"
                >
                  👁️
                </button>

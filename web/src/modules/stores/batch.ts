@@ -220,28 +220,67 @@ export const useBatchStore = defineStore('batch', () => {
             case 'task:progress':
                 const progressData: TaskProgress = {
                     currentUrl: message.data.currentUrl,
-                    currentPhase: message.data.phase,
-                    total: message.data.total
+                    currentPhase: message.data.phase || message.data.currentPhase,
+                    total: message.data.total,
+                    progress: message.data.progress,
+                    stepText: message.data.stepText
                 }
 
                 // 处理增量结果
                 if (message.data.lastResult) {
                     const target = (isCurrent ? currentTask.value : task) as any
                     if (target) {
+                        // 确保 results 存在且为数组或分组对象
                         if (!target.results) target.results = []
-                        const existingIndex = target.results.findIndex((r: any) => r.url === message.data.lastResult.url)
-                        if (existingIndex > -1) {
-                            target.results[existingIndex] = { ...target.results[existingIndex], ...message.data.lastResult }
-                        } else {
-                            target.results.push(message.data.lastResult)
+
+                        let resultsArray = target.results
+                        let isGrouped = false
+
+                        // 如果 results 是分组对象 { screenshot: { results: [] }, compare: { results: [] } }
+                        if (!Array.isArray(target.results) && typeof target.results === 'object') {
+                            isGrouped = true
+                            // 优先存入 compare 组，如果没有则存入 screenshot 组
+                            if (message.data.phase === 'compare' || target.results.compare) {
+                                if (!target.results.compare) target.results.compare = { results: [] }
+                                resultsArray = target.results.compare.results
+                            } else {
+                                if (!target.results.screenshot) target.results.screenshot = { results: [] }
+                                resultsArray = target.results.screenshot.results
+                            }
+                        }
+
+                        if (Array.isArray(resultsArray)) {
+                            const existingIndex = resultsArray.findIndex((r: any) => r.url === message.data.lastResult.url)
+                            if (existingIndex > -1) {
+                                resultsArray[existingIndex] = { ...resultsArray[existingIndex], ...message.data.lastResult }
+                            } else {
+                                resultsArray.push(message.data.lastResult)
+                            }
                         }
                     }
                 }
 
-                if (message.data.phase === 'compare') {
+                if (['compare', 'ai', 'finish'].includes(message.data.phase || message.data.currentPhase)) {
                     const target = (isCurrent ? currentTask.value : task) as any
                     if (target) {
-                        progressData.success = target.results?.filter((r: any) => r.status === 'completed' || r.success).length
+                        // 1. 统一计算成功数
+                        let res = target.results
+                        if (res !== null && !Array.isArray(res) && typeof res === 'object') {
+                            res = res.compare?.results || res.screenshot?.results || []
+                        }
+
+                        const completedItems = Array.isArray(res)
+                            ? res.filter((r: any) => r.status === 'completed' || r.success)
+                            : []
+
+                        progressData.success = completedItems.length
+
+                        // 2. 实时累加累计差异点与平均相似度
+                        if (completedItems.length > 0) {
+                            progressData.totalDiffCount = completedItems.reduce((sum: number, r: any) => sum + (Number(r.diffCount) || 0), 0)
+                            const totalSim = completedItems.reduce((sum: number, r: any) => sum + (Number(r.similarity) || 0), 0)
+                            progressData.avgSimilarity = totalSim / completedItems.length
+                        }
                     }
                 } else {
                     progressData.success = message.data.current
@@ -254,9 +293,9 @@ export const useBatchStore = defineStore('batch', () => {
                     status: 'completed',
                     success: message.data.compare ? message.data.compare.successCount : message.data.screenshot.success,
                     failed: message.data.compare ? message.data.compare.failedCount : message.data.screenshot.failed,
-                    duration: message.data.duration,
-                    avgSimilarity: message.data.compare?.avgSimilarity,
-                    totalDiffCount: message.data.compare?.totalDiffCount,
+                    duration: Number(message.data.duration) || 0,
+                    avgSimilarity: Number(message.data.compare?.avgSimilarity ?? message.data.compare?.avg_similarity) || 0,
+                    totalDiffCount: Number(message.data.compare?.totalDiffCount ?? message.data.compare?.total_diff_count) || 0,
                     results: message.data.compare ? message.data.compare.results : message.data.screenshot.results
                 }
                 updateTaskProgress(taskId, finalData)

@@ -109,11 +109,23 @@ function applyDeviceRatio(ratio) {
 /** 彻底清空当前会话：用于开始全新的 UI 对比任务 */
 resetBtn.addEventListener('click', () => {
     if (confirm("确定要清空当前的截图和诊断结果吗？")) {
-        chrome.storage.local.remove(['popupState'], () => {
-            location.reload(); // 简单粗暴的状态清理
+        // 1. 立即清除 UI（提供即时反馈）
+        actualPreview.innerHTML = `<span class="upload-placeholder" style="font-size: 11px;">按 'S' 键<br>或由网页截取</span>`;
+        designDropzone.innerHTML = `<span class="upload-placeholder" style="font-size: 11px;">拖拽设计稿<br>至此处</span>`;
+        if (resultArea) resultArea.style.display = 'none';
+
+        // 2. 发送消息清除 Background 中的截屏缓存
+        chrome.runtime.sendMessage({ type: "CLEAR_CACHE" }, () => {
+            // 3. 清除 Persistent Storage 并刷新
+            chrome.storage.local.remove(['popupState'], () => {
+                location.reload();
+            });
         });
     }
 });
+
+// --- 数据持久化管理 (chrome.storage.local) ---
+// 业务原因：用户切换标签页或关闭弹窗后，希望已有的截图和诊断仍然存在。
 
 /**
  * 重点：导出并深度检查
@@ -132,12 +144,19 @@ gotoPlatformLink.addEventListener('click', async (e) => {
     gotoPlatformLink.innerText = "⏳ 正在同步至平台...";
 
     try {
+        // 直接使用原始图像数据发送至平台，由后端 CompareService 执行 1:1 无损补齐对齐
+        // 这样可以彻底避免因高度不同导致的纵向拉伸失真
+        console.log('[UI-Eye] 正在向平台同步原始比例数据...');
+
         const response = await fetch("http://localhost:3000/api/extension/export", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                ...currentData,
-                diagnosis: currentData.diagnosisResult
+                actualImage: currentData.actualImage,
+                designImage: currentData.designImage,
+                diagnosis: currentData.diagnosisResult,
+                styles: currentData.styles,
+                elementInfo: currentData.elementInfo
             })
         });
 
@@ -172,31 +191,47 @@ chrome.runtime.sendMessage({ type: "GET_LAST_CAPTURE" }, (response) => {
 });
 
 /**
- * 传统模式：一键捕获当前完整视口
- * 使用 chrome.tabs.captureVisibleTab 接口。
+ * 传统模式：一键捕获当前完整页面（支持全页滚动截图）
+ * 使用 content script 配合实现真正的全页截图
  */
 captureFullBtn.addEventListener('click', async () => {
     captureFullBtn.disabled = true;
-    captureFullBtn.innerHTML = "⏳ 正在捕获...";
+    captureFullBtn.innerHTML = "⏳ 正在全页截图...";
 
     try {
-        const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "png" });
-        if (!dataUrl) throw new Error("截屏请求被拒绝");
+        // 获取当前活动标签页
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-        // 构造虚拟捕获数据包
-        const mockData = {
-            croppedImage: dataUrl,
-            styles: { tagName: "BODY (Full Page)" },
-            url: "Current Viewport"
-        };
+        // 向 content script 发送全页截图请求
+        chrome.tabs.sendMessage(tab.id, { action: "CAPTURE_FULL_PAGE" }, (response) => {
+            if (chrome.runtime.lastError) {
+                alert("截图失败: 请刷新页面后重试");
+                captureFullBtn.disabled = false;
+                captureFullBtn.innerHTML = "📸 一键截屏";
+                return;
+            }
 
-        updateActualPreview(mockData);
-        // 同步至 Background 缓存，确保全局一致
-        chrome.runtime.sendMessage({ type: "SYNC_CACHE", data: mockData });
+            if (response && response.status === "success") {
+                // 构造虚拟捕获数据包
+                const mockData = {
+                    croppedImage: response.fullPageImage,
+                    styles: { tagName: "BODY (Full Page)" },
+                    url: response.url
+                };
+
+                updateActualPreview(mockData);
+                // 同步至 Background 缓存，确保全局一致
+                chrome.runtime.sendMessage({ type: "SYNC_CACHE", data: mockData });
+            } else {
+                alert("截图失败: " + (response?.error || "未知错误"));
+            }
+
+            captureFullBtn.disabled = false;
+            captureFullBtn.innerHTML = "📸 一键截屏";
+        });
 
     } catch (err) {
         alert("截屏失败: " + err.message);
-    } finally {
         captureFullBtn.disabled = false;
         captureFullBtn.innerHTML = "📸 一键截屏";
     }

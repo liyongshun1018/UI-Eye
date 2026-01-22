@@ -85,10 +85,14 @@ class BatchCompareService {
                         const designPath = resolveDesignPath(rawDesignSource)
                         if (!fs.existsSync(designPath)) throw new Error(`设计稿不存在: ${designPath}`)
 
+                        // 确定截图路径 (确认为物理路径)
+                        const screenshotPath = resolveDesignPath(item.screenshot_path)
+                        if (!fs.existsSync(screenshotPath)) throw new Error(`截图文件不存在: ${screenshotPath}`)
+
                         // 执行对比 (纠正为位置参数)
                         const compareResult = await this.compareService.compare(
                             designPath,
-                            item.screenshot_path,
+                            screenshotPath,
                             {
                                 threshold: compareConfig.tolerance ? compareConfig.tolerance / 100 : 0.1,
                                 engine: compareConfig.engine || 'resemble'
@@ -162,8 +166,11 @@ class BatchCompareService {
                             reportId: reportId,
                             similarity: compareResult.similarity,
                             diffCount: compareResult.diffRegions?.length || 0,
+                            screenshot_path: normalizeToPublicUrl(item.screenshot_path),
                             status: 'completed'
                         }
+
+                        console.log(`[Batch] 实时推送: ${item.url} -> ${finalResult.screenshot_path}`);
 
                         // 完成后推送最新快照
                         if (progressCallback) {
@@ -244,8 +251,8 @@ class BatchCompareService {
                 total: task.total,
                 success: task.success,
                 failed: task.failed,
-                avgSimilarity: task.avg_similarity,
-                totalDiffCount: task.total_diff_count
+                avgSimilarity: task.avg_similarity || 0,
+                totalDiffCount: task.total_diff_count || 0
             },
             items: items.map(item => ({
                 id: item.id,
@@ -254,6 +261,7 @@ class BatchCompareService {
                 status: item.status,
                 similarity: item.similarity,
                 diffCount: item.diff_count,
+                screenshot_path: item.screenshot_path ? normalizeToPublicUrl(item.screenshot_path) : null,
                 error: item.error_message
             }))
         }

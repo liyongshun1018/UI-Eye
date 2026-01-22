@@ -64,14 +64,14 @@
         <div class="stat-icon">📊</div>
         <div class="stat-content">
           <div class="stat-label">相似度</div>
-          <div class="stat-value highlight">{{ similarity.toFixed(1) }}%</div>
+          <div class="stat-value highlight">{{ similarity?.toFixed(1) ?? '0.0' }}%</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon">🔴</div>
         <div class="stat-content">
           <div class="stat-label">差异像素</div>
-          <div class="stat-value">{{ diffPixels.toLocaleString() }}</div>
+          <div class="stat-value">{{ diffPixels?.toLocaleString() ?? '0' }}</div>
         </div>
       </div>
     </div>
@@ -169,11 +169,11 @@ const handleResetZoom = () => {
 .image-viewport {
   position: relative;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-origin: top left;
+  transform-origin: top center; /* 统一为顶部居中 */
 }
 
 .diff-highlight-image {
-  max-width: 100%;
+  max-width: none;
   height: auto;
   display: block;
 }

@@ -22,7 +22,7 @@ class CaptureService {
             height: 667,           // 默认高度
             fullPage: true,        // 默认截取长屏
             waitUntil: 'networkidle0', // 默认等待网络完全空闲
-            deviceScaleFactor: 2   // 2倍分辨率 (Retina) 确保 AI 分析更精准
+            deviceScaleFactor: 1   // 统一使用 1:1 像素，确保与设计稿对齐，避免 2x/3x 缩放导致 ghosting
         }
     }
 

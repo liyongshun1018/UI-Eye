@@ -213,11 +213,12 @@ onMounted(() => {
 
 .slider-base {
   display: block;
-  max-width: 100%;
+  max-width: none;
   height: auto;
   position: relative;
   z-index: 1;
   transition: transform 0.3s ease;
+  transform-origin: top left;
 }
 
 .slider-overlay {
@@ -231,6 +232,7 @@ onMounted(() => {
   z-index: 2;
   pointer-events: none;
   transition: transform 0.3s ease;
+  transform-origin: top left;
 }
 
 .diff-controls {

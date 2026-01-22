@@ -166,7 +166,7 @@ function startVisualCapture(el) {
     }, 200);
 }
 
-// 核心资产：Canvas 局部像素裁剪算法
+// 核心资产：Canvas 局部像素裁剪与全页拼接算法
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "CROP_IMAGE") {
         // 收到背景脚本传回的全屏截图，开始按矩形坐标进行精细裁剪
@@ -174,8 +174,171 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({ status: "success", croppedBase64 });
         });
         return true; // 异步响应标志
+    } else if (request.action === "CAPTURE_FULL_PAGE") {
+        // 启动全页滚动截图
+        captureFullPage().then(fullPageImage => {
+            sendResponse({ status: "success", fullPageImage, url: window.location.href });
+        }).catch(err => {
+            sendResponse({ status: "error", error: err.message });
+        });
+        return true;
     }
 });
+
+/**
+ * 通用消息发送包装器，支持 Promise 和错误检测
+ */
+async function sendMessageAsync(message) {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(message, (response) => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+            }
+            resolve(response);
+        });
+    });
+}
+
+/**
+ * 辅助函数：临时隐藏/恢复页面上的固定定位元素
+ * 目的：防止 Sticky/Fixed 元素在长图截取时每一帧都重复出现
+ */
+function toggleFixedElements(hide) {
+    const selector = 'fixed, sticky'; // 用于日志
+    const elements = document.querySelectorAll('*');
+    elements.forEach(el => {
+        const style = window.getComputedStyle(el);
+        if (style.position === 'fixed' || style.position === 'sticky') {
+            if (hide) {
+                // 仅对可见元素操作，存储原始 display
+                if (style.display !== 'none') {
+                    el.setAttribute('data-ui-eye-original-display', el.style.display);
+                    el.style.display = 'none';
+                }
+            } else {
+                // 恢复原始 display
+                if (el.hasAttribute('data-ui-eye-original-display')) {
+                    el.style.display = el.getAttribute('data-ui-eye-original-display');
+                    el.removeAttribute('data-ui-eye-original-display');
+                }
+            }
+        }
+    });
+}
+
+/**
+ * 全页截图核心流程控制 (深度优化版)
+ * 采用“动态步长校准”算法，解决空白缝隙与重复遮挡问题
+ */
+async function captureFullPage() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const originalScrollPos = window.scrollY;
+            const fullHeight = Math.max(
+                document.documentElement.scrollHeight,
+                document.body.scrollHeight,
+                document.documentElement.offsetHeight
+            );
+            const logicalWidth = window.innerWidth;
+
+            // 1. 预处理：隐藏固定定位元素
+            toggleFixedElements(true);
+
+            // 2. 辅助函数：带重试的快照获取
+            const captureWithRetry = async (frameIndex, maxRetries = 3) => {
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await sendMessageAsync({ type: "CAPTURE_VISIBLE_PART" });
+                        if (response && response.dataUrl) return response.dataUrl;
+                    } catch (e) {
+                        console.warn(`[UI-Eye] 帧 ${frameIndex} 尝试 ${i + 1} 异常:`, e);
+                    }
+                    await new Promise(r => setTimeout(r, 400 * (i + 1)));
+                }
+                return null;
+            };
+
+            // 3. 校准阶段：获取第一帧并测算【物理像素高度】与【逻辑缩放比】
+            const firstFrameBase64 = await captureWithRetry(0);
+            if (!firstFrameBase64) throw new Error("校准帧获取失败");
+
+            const captureAttrs = await new Promise((res) => {
+                const img = new Image();
+                img.onload = () => {
+                    const ratio = img.width / logicalWidth;
+                    // 核心：基于实际图片像素推导逻辑上的采集高度
+                    const logicalCaptureHeight = img.height / ratio;
+                    res({ ratio, logicalCaptureHeight });
+                };
+                img.src = firstFrameBase64;
+            });
+
+            const { ratio, logicalCaptureHeight } = captureAttrs;
+            // 步长留出 5% 的重叠区域，确保拼接处无缝衔接
+            const overlap = 20; // 20px 重叠余裕
+            const scrollStep = logicalCaptureHeight - (overlap / ratio);
+
+            console.log(`[UI-Eye] 校准完成: 采集高度=${logicalCaptureHeight}, 步长=${scrollStep}, 比率=${ratio}`);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = logicalWidth * ratio;
+            canvas.height = fullHeight * ratio;
+            const ctx = canvas.getContext('2d');
+
+            let currentScrollY = 0;
+            let frameIdx = 0;
+
+            // 4. 采集循环
+            while (currentScrollY < fullHeight) {
+                window.scrollTo(0, currentScrollY);
+                // 针对移动端模拟器，增加微小延迟确保渲染就绪
+                await new Promise(r => setTimeout(r, 400));
+
+                const base64 = await captureWithRetry(frameIdx + 1);
+                if (!base64) break;
+
+                await new Promise((resolveDraw) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const actualScrollY = window.scrollY;
+                        // 计算源图裁剪位置：如果滚动不到位（触底），需要从图片底部向上采样
+                        const sourceY = Math.max(0, (currentScrollY - actualScrollY) * ratio);
+
+                        let drawHeight = logicalCaptureHeight;
+                        if (currentScrollY + logicalCaptureHeight > fullHeight) {
+                            drawHeight = fullHeight - currentScrollY;
+                        }
+
+                        ctx.drawImage(
+                            img,
+                            0, sourceY,
+                            img.width, drawHeight * ratio,
+                            0, currentScrollY * ratio,
+                            img.width, drawHeight * ratio
+                        );
+                        resolveDraw();
+                    };
+                    img.src = base64;
+                });
+
+                currentScrollY += scrollStep;
+                frameIdx++;
+                if (frameIdx > 150) break; // 安全熔断
+            }
+
+            // 5. 收尾：恢复现场
+            toggleFixedElements(false);
+            window.scrollTo(0, originalScrollPos);
+
+            resolve(canvas.toDataURL('image/png'));
+        } catch (err) {
+            console.error("[UI-Eye] 级联捕获崩溃:", err);
+            toggleFixedElements(false);
+            reject(err);
+        }
+    });
+}
 
 /**
  * 利用 Canvas 技术执行图像局部提取

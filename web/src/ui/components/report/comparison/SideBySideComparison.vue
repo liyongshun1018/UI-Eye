@@ -104,17 +104,19 @@ const handleResetZoom = () => {
 <style scoped>
 .side-by-side-container {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   gap: 16px;
   min-height: 400px;
   position: relative;
+  width: 100%;
 }
 
 .comparison-side {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0; /* 防止 grid 项被内容撑开 */
 }
 
 .side-label {
@@ -132,18 +134,20 @@ const handleResetZoom = () => {
   background: white;
   border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
-  overflow: auto;
+  overflow: auto; /* 支持长图滚动 */
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 16px;
+  min-height: 300px;
 }
 
 .side-image {
-  max-width: 100%;
+  max-width: 100%; /* 默认缩放以适应容器 */
   height: auto;
   display: block;
   transition: transform 0.3s ease;
+  transform-origin: top center; /* 缩放时保持顶部居中 */
 }
 
 .comparison-divider {
@@ -153,6 +157,7 @@ const handleResetZoom = () => {
   justify-content: center;
   gap: 16px;
   padding: 16px 0;
+  width: 40px;
 }
 
 .divider-line {
@@ -175,9 +180,8 @@ const handleResetZoom = () => {
   border: 2px solid var(--border-color);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 20;
-  pointer-events: none;
+  pointer-events: none; /* 允许点击下方的图片滚动 */
 }
-
 
 .stats-item {
   display: flex;
@@ -260,13 +264,21 @@ const handleResetZoom = () => {
   font-size: 16px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
   .side-by-side-container {
     grid-template-columns: 1fr;
-    grid-template-rows: auto;
+    grid-template-rows: auto auto auto auto;
+    gap: 20px;
   }
   
+  .image-box {
+    max-height: 500px;
+  }
+
   .comparison-divider {
+    grid-row: 3;
+    width: 100%;
+    height: auto;
     flex-direction: row;
     padding: 0 16px;
   }
@@ -276,6 +288,17 @@ const handleResetZoom = () => {
     height: 2px;
     flex: 1;
     background: linear-gradient(to right, transparent, var(--border-color), transparent);
+  }
+
+  .diff-stats-badge {
+    position: static;
+    transform: none;
+    flex-direction: row;
+    justify-content: center;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
   }
 }
 </style>
