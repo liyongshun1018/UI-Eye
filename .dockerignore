@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+dist
+.git
+.env
+*.log
+server/data
+server/db/*.sqlite
+server/db/ui-eye.db*
+.DS_Store
+.vscode
+.gemini
+brain
+tmp
+temp

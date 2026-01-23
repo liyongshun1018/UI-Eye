@@ -12,7 +12,8 @@
     "server": "npm run server -w server",
     "test": "npm run test -w web",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "doctor": "node server/scripts/env-check.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

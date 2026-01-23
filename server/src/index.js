@@ -1,3 +1,4 @@
+// 核心依赖
 import express from 'express'
 import cors from 'cors'
 import axios from 'axios'
@@ -6,21 +7,26 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
 import dotenv from 'dotenv'
-import { createReport, updateReport, getReport, getReportList, deleteOldReports } from './database.js'
+import http from 'http'
+
+// 业务模块与路由
+import { deleteOldReports } from './database.js'
 import batchRoutes from './routes/batchRoutes.js'
 import scriptRoutes from './routes/scriptRoutes.js'
-import http from 'http'
 import wsServer from './services/WSServer.js'
-import { DIRS, ensureAllDirs, URL_PREFIXES, resolveDesignPath } from './utils/PathUtils.js'
+
+// 工具与基础设施
+import { DIRS, ensureAllDirs, URL_PREFIXES } from './utils/PathUtils.js'
 import CompareController from './controllers/CompareController.js'
+import { validate, compareSchema, extensionExportSchema } from './utils/ValidationSchemas.js'
+import globalErrorHandler, { catchAsync } from './utils/ErrorHandler.js'
 
-// 初始化控制器
+// 实例初始化
 const compareController = new CompareController()
-
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// 加载环境变量
+// 环境变量加载逻辑
 const rootEnvPath = path.resolve(__dirname, '../../.env')
 const serverEnvPath = path.resolve(__dirname, '../.env')
 
@@ -35,10 +41,10 @@ if (fs.existsSync(serverEnvPath)) {
     dotenv.config()
 }
 
-// 安全核查（调试 401 问题）
+// 核心密钥安全核查
 const apiKey = process.env.SILICONFLOW_API_KEY
 if (apiKey) {
-    console.log(`[内核] 已载入 SiliconFlow 密钥: ${apiKey.substring(0, 6)}... (长度: ${apiKey.length})`)
+    console.log(`[内核] 已载入 SiliconFlow 密钥: ${apiKey.substring(0, 6)}...`)
 } else {
     console.error('[内核] 严重警告: 未检测到 SILICONFLOW_API_KEY，AI 对比功能将失效！')
 }
@@ -46,23 +52,31 @@ if (apiKey) {
 const app = express()
 const PORT = 3000
 
-// 中间件
-app.use(cors())
-app.use(express.json({ limit: '50mb' }))
+/**
+ * 基础中间件配置
+ */
+app.use(cors()) // 开启跨域支持
+app.use(express.json({ limit: '50mb' })) // 支持大容量 JSON Payload（用于图床同步）
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
-// 静态文件服务
+/**
+ * 静态资源托管规划
+ * 将内部物理路径映射为前端可直接访问的 Web URL
+ */
 app.use(URL_PREFIXES.UPLOADS, express.static(DIRS.UPLOADS))
 app.use(URL_PREFIXES.REPORTS, express.static(DIRS.REPORTS))
 app.use(URL_PREFIXES.BATCH_SCREENSHOTS, express.static(DIRS.BATCH_SCREENSHOTS))
 
-// 确保目录存在
+// 确保系统所需的持久化目录结构完整
 ensureAllDirs(fs)
 
-// 初始化数据库并清理过期记录
-deleteOldReports(7) // 删除 7 天前的记录
+// 数据库日常维护：自动清理过期报告（默认保留 7 天）
+deleteOldReports(7)
 
-// 配置文件上传
+/**
+ * 磁盘存储策略配置 (Multer)
+ * 用于处理前端上传的设计稿原件
+ */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, DIRS.UPLOADS)
@@ -75,7 +89,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    limits: { fileSize: 10 * 1024 * 1024 }, // 限制单文件 10MB
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png/
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase())
@@ -84,163 +98,78 @@ const upload = multer({
         if (mimetype && extname) {
             return cb(null, true)
         } else {
-            cb(new Error('只支持 PNG 和 JPG 格式的图片'))
+            cb(new Error('系统仅支持 PNG 和 JPG 格式的平面设计稿'))
         }
     }
 })
 
-// API 路由
+/**
+ * API 路由定义
+ */
 
-// 健康检查
+// 健康监测
 app.get('/api/health', (req, res) => {
-    res.json({ success: true, message: 'Server is running' })
+    res.json({ success: true, message: 'UI-Eye 服务运行正常' })
 })
 
-
-// 批量任务路由
+// 批量任务与脚本自动化路由
 app.use('/api/batch', batchRoutes)
-// 脚本管理路由 (统一挂载在 /api/batch 下)
 app.use('/api/batch/scripts', scriptRoutes)
 
-// 文件上传路由
+// 核心业务：文件上传
 app.post('/api/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
-        return res.status(400).json({
-            success: false,
-            message: '请选择要上传的文件'
-        })
+        return res.status(400).json({ success: false, message: '请选择要上传的文件' })
     }
-
-    // 返回文件访问路径
     const fileUrl = `${URL_PREFIXES.UPLOADS}/${req.file.filename}`
-
     res.json({
         success: true,
-        message: '上传成功',
         data: {
             url: fileUrl,
-            path: fileUrl,
             filename: req.file.filename,
-            originalname: req.file.originalname,
             size: req.file.size
         }
     })
 })
 
-// 新增：HTML 预览代理接口 (支持 CSS 注入与跨域数据劫持)
-// 移除已失效的预览代理接口，改为前端直接跳转
-app.all('/api/proxy-preview', (req, res) => {
-    res.status(410).send('该接口已废弃，请使用直接跳转方式查看页面。')
-})
+// 核心业务：启动像素对比任务
+// 采用鉴权、校验、异步执行三层包装
+app.post('/api/compare', validate(compareSchema), catchAsync((req, res) => compareController.startCompare(req, res)))
 
-// 上传设计稿
-app.post('/api/upload-design', upload.single('file'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: '请上传文件'
-            })
-        }
+/**
+ * 浏览器插件增强接口
+ */
+// 实时 AI 视觉诊断
+app.post('/api/extension/diagnose', catchAsync((req, res) => compareController.diagnoseExtension(req, res)))
+// 数据导出与持久化同步
+app.post('/api/extension/export', validate(extensionExportSchema), catchAsync((req, res) => compareController.exportExtensionReport(req, res)))
 
-        res.json({
-            success: true,
-            data: {
-                filename: req.file.filename,
-                path: req.file.path,
-                url: `/uploads/${req.file.filename}`
-            }
-        })
-    } catch (error) {
-        console.error('上传失败:', error)
-        res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-})
+/**
+ * 报告管理接口
+ */
+app.get('/api/report/:id', catchAsync((req, res) => compareController.getReport(req, res)))
+app.delete('/api/report/:id', catchAsync((req, res) => compareController.deleteReport(req, res)))
+app.get('/api/reports', catchAsync((req, res) => compareController.getReportList(req, res)))
 
-// 获取蓝湖设计稿（通过图片 URL）
-app.post('/api/lanhu/fetch', async (req, res) => {
-    try {
-        const { url } = req.body
+/**
+ * 全局异常捕捉中间件
+ * 注意：必须放在所有应用路由定义的最后，作为最后的安全兜底
+ */
+app.use(globalErrorHandler)
 
-        if (!url) {
-            return res.status(400).json({
-                success: false,
-                message: '请提供图片 URL'
-            })
-        }
-
-        // 使用 LanhuService 下载图片
-        const LanhuService = (await import('./services/LanhuService.js')).default
-        const lanhuService = new LanhuService()
-
-        const result = await lanhuService.downloadImage(url)
-
-        res.json({
-            success: true,
-            data: {
-                imageUrl: result.url,
-                filename: result.filename,
-                width: result.width,
-                height: result.height,
-                format: result.format,
-                size: result.size
-            },
-            message: '图片下载成功'
-        })
-    } catch (error) {
-        console.error('获取图片失败:', error)
-        res.status(500).json({
-            success: false,
-            message: error.message
-        })
-    }
-})
-
-// 开始对比
-app.post('/api/compare', (req, res) => compareController.startCompare(req, res))
-
-// 浏览器插件专用：AI 视觉诊断（单次对比）
-app.post('/api/extension/diagnose', (req, res) => compareController.diagnoseExtension(req, res))
-app.post('/api/extension/export', (req, res) => compareController.exportExtensionReport(req, res))
-
-// 获取对比报告
-app.get('/api/report/:id', (req, res) => compareController.getReport(req, res))
-
-// 删除对比报告
-app.delete('/api/report/:id', (req, res) => compareController.deleteReport(req, res))
-
-// 获取报告列表
-app.get('/api/reports', (req, res) => compareController.getReportList(req, res))
-
-
-
-// 错误处理中间件
-app.use((err, req, res, next) => {
-    console.error('服务器错误:', err)
-    res.status(500).json({
-        success: false,
-        message: err.message || '服务器内部错误'
-    })
-})
-
-// 创建 HTTP 服务器供 WebSocket 使用
+// 创建 HTTP 混合服务器（支持 Web 与 WebSocket 共用端口）
 const server = http.createServer(app)
 
-// 初始化 WebSocket 服务
+// 启动实时通讯补丁
 wsServer.init(server)
 
-// 启动服务器
+// 绑定端口，正式对外提供服务
 server.listen(PORT, () => {
-    console.log(`\n🚀 UI-Eye 后端服务已启动`)
-    console.log(`📍 服务地址: http://localhost:${PORT}`)
-    console.log(`🔌 WebSocket: ws://localhost:${PORT}`)
-    console.log(`🔌 WebSocket: ws://localhost:${PORT}`)
-    console.log(`📁 上传目录: ${path.join(__dirname, '../data/uploads')}`)
-    console.log(`📊 报告目录: ${path.join(__dirname, '../data/reports')}`)
-    console.log(`\n按 Ctrl+C 停止服务\n`)
+    console.log(`\n🚀 UI-Eye 后端服务已加载完毕`)
+    console.log(`📍 接口网关: http://localhost:${PORT}`)
+    console.log(`🔌 实时通道: ws://localhost:${PORT}`)
+    console.log(`📁 存储集群: ${DIRS.UPLOADS}`)
+    console.log(`\n按 Ctrl+C 安全退出进程\n`)
 })
 
 export default app

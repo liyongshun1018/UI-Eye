@@ -7,61 +7,64 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 /**
- * CaptureService.js - 页面截图服务
- * 利用 Puppeteer (无头浏览器) 模拟真实用户访问网页并生成高分辨率截图。
- * 支持视口缩放 (Device Scale Factor)、全页截图以及移动端 User-Agent 模拟。
+ * CaptureService - 自动化页面快照服务
+ * 
+ * 核心设计目标：
+ * 1. 拟真性：利用 Puppeteer (Chromium) 模拟真实的人类设备环境（User-Agent、视口尺寸、渲染链路）。
+ * 2. 稳定性：封装了资源加载探测、网络空闲判定、以及针对动态 DOM 伸缩的“视觉补偿等待”机制。
+ * 3. 像素对齐：强制 Device Scale Factor 为 1，规避 Retina 屏导致的逻辑像素与物理像素图像偏移问题。
  */
 class CaptureService {
     /**
-     * 构造截图服务
-     * 初始化默认截图配置，确保在不同视口下的一致性。
+     * 服务初始化：定义工业级截图基准配置
      */
     constructor() {
         this.defaultOptions = {
-            width: 375,            // 默认宽度 (iPhone 尺寸)
-            height: 667,           // 默认高度
-            fullPage: true,        // 默认截取长屏
-            waitUntil: 'networkidle0', // 默认等待网络完全空闲
-            deviceScaleFactor: 1   // 统一使用 1:1 像素，确保与设计稿对齐，避免 2x/3x 缩放导致 ghosting
+            width: 375,            // 模拟手机基础宽度（对齐大多数移动端 H5 规范）
+            height: 667,           // 模拟手机基础高度
+            fullPage: true,        // 自动探测长屏，深度捕获全量内容
+            waitUntil: 'networkidle0', // 严格模式：等待全量网络请求结束（无活跃连接）
+            deviceScaleFactor: 1   // 【工程关键】强制 1:1 像素捕获。若设为 2 会导致图像尺寸翻倍，使像素对比算法失效
         }
     }
 
     /**
-     * 执行网页截图任务
-     * 封装了完整的浏览器生命周期管理：启动 -> 创建页面 -> 导航 -> 等待 -> 截图 -> 关闭。
-     * @param {string} url - 目标网页的在线 URL
-     * @param {Object} options - 自定义截图选项，覆盖默认值
-     * @returns {Promise<Object>} 包含文件名、绝对路径和相对访问 URL 的对象
+     * 核心接口：执行生产级网页截图
+     * 流程：引擎点火 -> 环境克隆 -> URL 导航 -> 状态平稳检测 -> 二进制采集 -> 资源落库
+     * 
+     * @param {string} url - 被测网页的 URL 凭证
+     * @param {Object} options - 自定义覆盖配置（如视口定制）
+     * @returns {Promise<Object>} 包含物权路径与 Web URL 的结果集
      */
     async capture(url, options = {}) {
         const config = { ...this.defaultOptions, ...options }
         let browser = null
 
         try {
-            console.log(`[截图服务] 正在渲染页面: ${url}`)
+            console.log(`[截图中枢] 正在同步渲染快照: ${url}`)
 
-            // 1. 启动无头浏览器
+            // 🚀 1. 指令调度：唤醒 Chromium 混合动力无头模式
             browser = await this.launchBrowser()
 
-            // 2. 并在浏览器中开启新标签页并配置模拟环境
+            // 🚀 2. 环境模拟：注入视口尺寸并伪造设备指纹
             const page = await this.createPage(browser, config)
 
-            // 3. 访问目标 URL
+            // 🚀 3. 通讯建立：发起 HTTP(S) 请求并监控报文状态
             await this.navigateToPage(page, url, config.waitUntil)
 
-            // 4. 额外缓冲：等待图片、字体等静态资源完成最终渲染
+            // 🚀 4. 视觉补偿（2.0s）：处理懒加载图、CSS 骨架屏动画、或异步 JS 渲染的尾音阶段
             await this.waitForResources(page)
 
-            // 5. 保存截图到指定目录
+            // 🚀 5. 像素导出：将页面当前 Render Tree 转化为 PNG 物理文件
             const result = await this.takeScreenshot(page, config.fullPage)
 
-            console.log(`[截图服务] 任务成功完成，输出至: ${result.path}`)
+            console.log(`[截图中枢] 抓取链条执行成功，锚点: ${result.path}`)
             return result
         } catch (error) {
-            console.error('[截图服务] 截图链路异常:', error)
-            throw new Error(`页面截图失败: ${error.message}`)
+            console.error('[截图中枢] 链路捕获异常:', error)
+            throw new Error(`Puppeteer 执行中断: ${error.message}`)
         } finally {
-            // 确保无论成功还是失败，浏览器进程都能被正确关闭，防止内存泄漏
+            // 安全熔断：无论成功失败，必须回收浏览器进程资源以释放 V8 堆内存
             if (browser) {
                 await browser.close()
             }
@@ -69,40 +72,37 @@ class CaptureService {
     }
 
     /**
-     * 内部方法：启动 Puppeteer 浏览器实例
-     * 配置了 Linux 环境下必须的 --no-sandbox 等参数
-     * @returns {Promise<Browser>}
+     * 浏览器唤醒配置 (优化版)
+     * 包含了在 Docker/Linux 环境下绕过沙盒限制的核心参数集
      */
     async launchBrowser() {
         return await puppeteer.launch({
-            headless: 'new', // 使用 Puppeteer 新一代无头模式
+            headless: 'new', // 采用 Puppeteer 全新重构的无头渲染引擎
             args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
+                '--no-sandbox',             // 允许在 root 环境执行
+                '--disable-setuid-sandbox', // 禁用 setuid 沙盒
+                '--disable-dev-shm-usage',  // 规避共享内存过小导致的崩溃
                 '--disable-accelerated-2d-canvas',
-                '--disable-gpu'
+                '--disable-gpu'             // 无头环境下禁用 GPU 加速以换取更稳定的渲染一致性
             ]
         })
     }
 
     /**
-     * 内部方法：初始化页面视口和 User-Agent
-     * 模拟移动端 Safari 浏览器环境，以获取最真实的移动端 H5 渲染效果。
-     * @param {Browser} browser 
-     * @param {Object} config 
+     * 页面环境克隆
+     * 核心职责：设置精准视口、模拟 iPhone Safari User-Agent
      */
     async createPage(browser, config) {
         const page = await browser.newPage()
 
-        // 设置缩放比例，解决截图模糊问题
+        // 对齐视觉规范
         await page.setViewport({
             width: config.width,
             height: config.height,
             deviceScaleFactor: config.deviceScaleFactor
         })
 
-        // 设置移动端标准的 User-Agent
+        // 设备指纹伪装，引导服务器返回真实的移动端 H5 模版
         await page.setUserAgent(
             'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1'
         )
@@ -111,26 +111,26 @@ class CaptureService {
     }
 
     /**
-     * 内部方法：执行 URL 跳转
+     * 跳转逻辑封装
      */
     async navigateToPage(page, url, waitUntil) {
         await page.goto(url, {
             waitUntil,
-            timeout: 30000 // 默认 30 秒超时
+            timeout: 30000 // 限制 30s 最大超时上限，防止任务挂死
         })
     }
 
     /**
-     * 内部方法：视觉补偿等待
-     * 哪怕网络空闲，有时动态 JS 仍需一点时间来调整 DOM 布局或动画，故强制等待 2s 确保 UI 稳定。
+     * 视觉补偿等待 (Engineering Buffer)
+     * 哪怕 NetworkIdle 触发，页面可能仍有 CSS 过渡动画或动态图片懒加载，
+     * 强制 2000ms 的沉淀时间能极大提高“对比相似度”的稳定性。
      */
     async waitForResources(page, delay = 2000) {
         await new Promise(resolve => setTimeout(resolve, delay))
     }
 
     /**
-     * 内部方法：物理截图并保存文件
-     * 生成带时间戳的文件名，存储在 uploads 目录下。
+     * 物理存储记录：生成 PNG 三元组（文件名、物理路径、访问链接）
      */
     async takeScreenshot(page, fullPage) {
         const timestamp = Date.now()
@@ -139,7 +139,7 @@ class CaptureService {
 
         await page.screenshot({
             path: filepath,
-            fullPage
+            fullPage // 若页面高度超出 Viewport，则自动滚动截取全量内容
         })
 
         return {
@@ -150,7 +150,8 @@ class CaptureService {
     }
 
     /**
-     * 批量处理：支持一次性截取多个 URL（待扩展到并发处理）
+     * 批量接口：同步序列化捕获
+     * 注：此处采用串行逻辑确保稳定性，如需提效可改为并发 P-Limit 模式
      */
     async captureMultiple(urls, options = {}) {
         const results = []

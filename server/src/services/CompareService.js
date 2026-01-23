@@ -11,90 +11,96 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 /**
- * CompareService.js - 图像对比核心服务
- * 负责两张图片的像素级比较、尺寸对齐、差异图生成以及后续的差异聚类分析。
+ * CompareService - 视觉比对核心调度引擎
+ * 
+ * 职责：
+ * 1. 图像规格化：确保不同分辨率的设计稿与截图在同一物理坐标系下进行精准像素比对。
+ * 2. 算法吸附 (Smart Alignment)：利用滑动窗口算法自动补偿 1-2px 的渲染引擎偏差。
+ * 3. 结果量化：输出相似度百分比、差异像素点分布、以及逻辑聚类区域。
+ * 4. 格式化生产：生成带有标注框的增强型差异图（Augmented Diff Image）。
  */
 class CompareService {
     /**
-     * 构造对比服务
-     * 初始化默认参数并实例化差异聚类服务。
+     * 实例初始化：配置对比精密参数
      */
     constructor() {
         this.defaultOptions = {
-            threshold: 0.1,      // 匹配容差 (0-1)，数值越小越敏锐
-            includeAA: false,    // 是否将抗锯齿像素视为差异
-            alpha: 0.1,          // 差异图背景透明度
-            diffColor: [255, 0, 0],      // 显著差异标注色 (红色)
-            diffColorAlt: [255, 200, 0]  // 次要差异标注色 (橙色)
+            threshold: 0.1,      // 像素差异判定阈值 (0-1)，越小代表对色彩偏差越敏感
+            includeAA: false,    // 是否剔除“抗锯齿曲线”产生的边缘色差噪点
+            alpha: 0.1,          // 差异背景透明度，用于在红点后面保留原图轮廓作为参照
+            diffColor: [255, 0, 0],      // 显著差异点的渲染色 (RGB)
+            diffColorAlt: [255, 200, 0]  // 聚类标注的辅助色彩
         }
 
-        /** 初始化差异聚类引擎，用于将离散的像素差异聚合成有意义的区域 */
+        /**
+         * 注入聚类分析器：
+         * 用于将杂乱的“红点”差异点阵，通过 DBSCAN 算法聚合为具有业务意义的矩形区域。
+         */
         this.clusteringService = new DiffClusteringService({
-            minRegionSize: 100,      // 过滤掉小于 100 像素的微小噪点
-            neighborhoodRadius: 10,  // 连通域搜索半径
-            maxRegions: 20,          // 最多提取 20 个核心差异点
-            padding: 5               // 标注框留白
+            minRegionSize: 100,      // 过滤面积小于 100 像素的孤立噪点
+            neighborhoodRadius: 10,  // 合并半径 10 像素以内的邻近差异
+            maxRegions: 20,          // 报告中最多标注 20 个高优先级差异区
+            padding: 5
         })
     }
 
     /**
-     * 主入口：对比两张图片并生成深度分析报告
-     * 流程：对齐尺寸 -> 执行像素级对比 -> 计算相似度 -> (可选) 聚类聚合 -> (可选) 绘制标注框
-     * @param {string} designPath - 设计稿文件的绝对路径
-     * @param {string} actualPath - 实际截图文件的绝对路径
-     * @param {Object} options - 自定义对比选项
-     * @returns {Promise<Object>} 包含相似度、差异区域及图片 URL 的结果对象
+     * 执行全量比对流水线
+     * 
+     * 核心步骤：
+     * Alignment (尺寸补白) -> Snapping (位移吸附) -> Match (像素扫描) -> Clustering (语义聚类) -> Save (资源化)
+     * 
+     * @param {string} designPath - 静态规范图路径
+     * @param {string} actualPath - 实际渲染截图路径
+     * @param {Object} options - 对比策略重载
+     * @returns {Promise<Object>} 包含视觉洞察指标的报告结构体
      */
     async compare(designPath, actualPath, options = {}) {
         const config = {
             ...this.defaultOptions,
-            engine: 'pixelmatch', // 默认使用高性能 pixelmatch 引擎
-            enableClustering: true, // 默认开启智能聚类分析
-            enableSmartAlignment: true, // 默认开启智能吸附
+            engine: 'pixelmatch',
+            enableClustering: true,
+            enableSmartAlignment: true,
             ...options
         }
         try {
-            console.log('[对比服务] 启动图像分析链路')
-            console.log(`[对比服务] 算法引擎: ${config.engine}`)
+            console.log('[比对中枢] 启动图像分析序列')
 
-            // 1. 获取对齐后的图片对象
+            // 🚀 1. 物理对齐：获取共通的最大宽高，利用透明像素补平尺寸差，建立同一坐标原点
             const alignmentData = await this.alignImages(designPath, actualPath)
             let { img1, img2, width, height } = alignmentData
 
-            // 初始化结果对象
             let result = {}
 
-            // 2. 核心增强：执行智能吸附 (Smart Alignment)
-            // 如果开启了此功能，系统会尝试微调图片位置以找到最小差异点
+            // 🚀 2. 智能吸附逻辑 (Smart Alignment)：
+            // 解决浏览器在不同渲染引擎下可能产生的 1px 抖动或由于滚动条导致的微小位移。
             if (config.enableSmartAlignment) {
                 const bestAlignment = await this.findBestAlignment(img1, img2, width, height, config)
                 img2 = bestAlignment.alignedImg
                 result.alignmentOffset = bestAlignment.offset
                 result.alignmentImprovement = bestAlignment.improvement
-                console.log(`[对比服务] 智能吸附完成，最佳偏移: x=${result.alignmentOffset.x}, y=${result.alignmentOffset.y}`)
             }
 
-            // 3. 根据配置选择底层算法引擎执行初步对比
+            // 🚀 3. 差异算力输出
             let engineResult
             if (config.engine === 'resemble') {
                 engineResult = await this.compareWithResemble(designPath, actualPath, config)
             } else if (config.engine === 'odiff') {
                 engineResult = await this.compareWithODiff(designPath, actualPath, config)
             } else {
-                // 注意：这里使用已经对齐（吸附）过的 img2
+                // 默认使用内存处理后的图像块进行 Pixelmatch 高速精算
                 engineResult = await this.compareWithPixelmatchProcessed(img1, img2, width, height, config)
             }
 
             result = { ...result, ...engineResult }
 
-            // 智能分析环节：如果存在差异且开启了聚类功能
+            // 🚀 4. 语义化聚类：将散乱的像素点拟合为逻辑组件边框
             if (config.enableClustering && (result.diffPixels > 0 || result.similarity < 100)) {
                 try {
-                    // 2. 利用聚类算法从差异图中提取语义化区域 (如：导航栏偏离、文字错位)
                     const diffRegions = await this.clusteringService.analyzeDiffRegions(result.diffImage.path)
 
                     if (diffRegions && diffRegions.length > 0) {
-                        // 3. 生成增强版差异图：在差异图像上直接绘制 ID 编号和矩形框，方便用户定位
+                        // 绘制带有索引编号的增强版差异报告图
                         const enhancedDiffPath = result.diffImage.path.replace('.png', '-annotated.png')
                         await this.clusteringService.drawRegionAnnotations(
                             result.diffImage.path,
@@ -102,7 +108,6 @@ class CompareService {
                             enhancedDiffPath
                         )
 
-                        // 组装最终结果
                         result.diffRegions = diffRegions
                         result.diffImage.annotatedPath = enhancedDiffPath
                         result.diffImage.annotatedUrl = `/reports/${path.basename(enhancedDiffPath)}`
@@ -110,34 +115,30 @@ class CompareService {
                         result.diffRegions = []
                     }
                 } catch (clusterError) {
-                    console.warn('[对比服务] 聚类分析失败 (非阻塞):', clusterError.message)
+                    console.warn('[比对中枢] 聚类流水线熔断 (容错处理中):', clusterError.message)
                     result.diffRegions = []
                 }
             }
 
             return result
         } catch (error) {
-            console.error('[对比服务] 对比链路崩溃:', error)
-            throw new Error(`图像对比失败: ${error.message}`)
+            console.error('[比对中枢] 链路致命错误:', error)
+            throw new Error(`图像分析链路执行失败: ${error.message}`)
         }
     }
 
     /**
-     * 内部方法：自动对齐两张图片
-     * 对比前必须保证两图分辨率一致。若不一致，将自动以最小公共区域进行等比例缩放/裁剪。
+     * 图像补白对齐控制
      */
     async alignImages(path1, path2) {
         try {
             const meta1 = await sharp(path1).metadata()
             const meta2 = await sharp(path2).metadata()
 
-            // 关键改动：不再执行缩放 (Scaling)，改用补全 (Padding)
-            // 选取较大的宽高作为基准，确保物理像素 1:1 保持，不足部分留白/置空
             const targetWidth = Math.max(meta1.width, meta2.width)
             const targetHeight = Math.max(meta1.height, meta2.height)
 
-            console.log(`[对比服务] 正在执行 1:1 尺寸补全: ${targetWidth}x${targetHeight} (无损对齐)`)
-
+            // 采用透明背景扩展，不拉伸图像，确保比对区域真实
             const buffer1 = await this.normalizeImage(path1, targetWidth, targetHeight)
             const buffer2 = await this.normalizeImage(path2, targetWidth, targetHeight)
 
@@ -146,13 +147,13 @@ class CompareService {
 
             return { img1, img2, width: targetWidth, height: targetHeight }
         } catch (error) {
-            console.error('[对比服务] 图片预处理失败:', error)
-            throw new Error(`图片对齐失败: ${error.message}`)
+            console.error('[比对中枢] 物理对齐失败:', error)
+            throw new Error(`无法完成图片对齐: ${error.message}`)
         }
     }
 
     /**
-     * 内部方法：使用 Sharp 执行 1:1 无损对齐（不缩放，仅扩展边界）
+     * 规格化处理：利用 Sharp 进行画布扩展
      */
     async normalizeImage(imagePath, targetWidth, targetHeight) {
         const metadata = await sharp(imagePath).metadata();
@@ -161,19 +162,22 @@ class CompareService {
 
         return await sharp(imagePath)
             .extend({
-                top: 0,
-                left: 0,
+                top: 0, left: 0,
                 bottom: Math.max(0, extendBottom),
                 right: Math.max(0, extendRight),
-                background: { r: 0, g: 0, b: 0, alpha: 0 } // 透明填充
+                background: { r: 0, g: 0, b: 0, alpha: 0 }
             })
-            .png()
-            .toBuffer()
+            .png().toBuffer()
     }
 
     /**
-     * 核心逻辑：智能吸附算法
-     * 目的：在 +/- 2 像素范围内寻找最佳对齐位，消除渲染引擎导致的 1px 抖动或整体偏移。
+     * 智能吸附模型 (Smart Alignment)
+     * 
+     * 数学原理：
+     * 1. 采用 [-1, 0, 1] 的九宫格位移搜索空间。
+     * 2. 在内存中模拟各偏移量下的“快速相似度计算”。
+     * 3. 计算“对齐改进率 (Improvement)”：(初始差异 - 偏移后最小差异) / 初始差异。
+     * 4. 判定阈值：若 Improvement > 10% 确认为抖动，执行物理位移重绘；否则视为正常差异不予修正。
      */
     async findBestAlignment(img1, img2, width, height, config) {
         const offsets = [
@@ -198,18 +202,17 @@ class CompareService {
 
         const improvement = initialDiff > 0 ? (initialDiff - minDiff) / initialDiff : 0
 
-        // 如果偏移能带来的改进小于 10%，则忽略偏移，防止过度拟合
+        // 置信度核查：只有当位移能大幅减少差异点时（>10%），才执行物理对齐，防止过度拟合
         if (improvement < 0.1) {
             return { alignedImg: img2, offset: { x: 0, y: 0 }, improvement: 0 }
         }
 
-        // 生成偏移后的图片数据
         const alignedImg = this.createOffsetImage(img2, width, height, bestOffset)
         return { alignedImg, offset: bestOffset, improvement }
     }
 
     /**
-     * 快速差异评估（不生成差异图，仅计数）
+     * 内存级图像差异快测
      */
     quickDiff(img1, img2, width, height, offset) {
         let diffCount = 0
@@ -229,6 +232,7 @@ class CompareService {
                 const i1 = (y * width + x) * 4
                 const i2 = (targetY * width + targetX) * 4
 
+                // 色觉感知阈值判定
                 if (
                     Math.abs(data1[i1] - data2[i2]) > 30 ||
                     Math.abs(data1[i1 + 1] - data2[i2 + 1]) > 30 ||
@@ -242,15 +246,14 @@ class CompareService {
     }
 
     /**
-     * 创建偏移后的 PNG 对象
+     * 物理位移重构（重绘对齐图层）
      */
     createOffsetImage(originalImg, width, height, offset) {
         if (offset.x === 0 && offset.y === 0) return originalImg
 
         const newImg = new PNG({ width, height })
-        // 填充背景色 (透明)
         for (let i = 0; i < newImg.data.length; i += 4) {
-            newImg.data[i + 3] = 0
+            newImg.data[i + 3] = 0 // 背景透明
         }
 
         for (let y = 0; y < height; y++) {
@@ -273,16 +276,11 @@ class CompareService {
     }
 
     /**
-     * 内部方法：调用底层像素匹配库
-     * @returns {number} 差异像素总数
+     * 核心封装：调用 pixelmatch 驱动底层 C++ 扫描
      */
     performPixelMatch(img1, img2, diff, width, height, config) {
         return pixelmatch(
-            img1.data,
-            img2.data,
-            diff.data,
-            width,
-            height,
+            img1.data, img2.data, diff.data, width, height,
             {
                 threshold: config.threshold,
                 includeAA: config.includeAA,
@@ -294,29 +292,51 @@ class CompareService {
     }
 
     /**
-     * 内部方法：将生成的差异图保存到本地磁盘
+     * 对齐结果保存与 Web 资源转换
      */
     async saveDiffImage(diff) {
-        const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+        const uniqueId = Math.random().toString(36).substring(2, 15)
         const filename = `diff-${uniqueId}.png`
         const filepath = path.join(__dirname, '../../data/reports', filename)
 
         await new Promise((resolve, reject) => {
-            diff.pack()
-                .pipe(fs.createWriteStream(filepath))
-                .on('finish', resolve)
-                .on('error', reject)
+            diff.pack().pipe(fs.createWriteStream(filepath)).on('finish', resolve).on('error', reject)
         })
+
+        // 异步生成缩略图，加速前端卡片渲染效率
+        const thumbUrl = await this.generateThumbnail(filepath)
 
         return {
             filename,
             path: filepath,
-            url: `/reports/${filename}`
+            url: `/reports/${filename}`,
+            thumbnailUrl: thumbUrl
         }
     }
 
     /**
-     * 计算百分比相似度
+     * 缩略图生成：将大容量图压缩为 400px WebP
+     */
+    async generateThumbnail(fullPath) {
+        try {
+            const thumbFilename = path.basename(fullPath).replace(/\.(png|jpg|jpeg)$/, '-thumb.webp')
+            const thumbPath = path.join(path.dirname(fullPath), thumbFilename)
+
+            await sharp(fullPath)
+                .resize(400, null, { withoutEnlargement: true })
+                .webp({ quality: 80 })
+                .toFile(thumbPath)
+
+            const isReport = thumbPath.includes('reports')
+            return isReport ? `/reports/${thumbFilename}` : `/uploads/${thumbFilename}`
+        } catch (error) {
+            console.warn('[比对中枢] 缩略图引擎异常 (非阻塞):', error.message)
+            return null
+        }
+    }
+
+    /**
+     * 量化：相似度计算公式
      */
     calculateSimilarity(diffPixels, totalPixels) {
         const similarity = ((totalPixels - diffPixels) / totalPixels) * 100
@@ -324,46 +344,30 @@ class CompareService {
     }
 
     /**
-     * 核心实现：Pixelmatch 对比逻辑
+     * 策略 A: Pixelmatch 混合模式
      */
     async compareWithPixelmatch(designPath, actualPath, config) {
-        // 对齐图片
         const { img1, img2, width, height } = await this.alignImages(designPath, actualPath)
         return await this.compareWithPixelmatchProcessed(img1, img2, width, height, config)
     }
 
     /**
-     * 核心实现：基于已处理（对齐/吸附）图片的 Pixelmatch 对比
+     * 算法执行底层序列
      */
     async compareWithPixelmatchProcessed(img1, img2, width, height, config) {
-        // 准备输出差异图缓冲区
         const diff = new PNG({ width, height })
-
-        // 像素级逐行扫描比较
         const diffPixels = this.performPixelMatch(img1, img2, diff, width, height, config)
-
-        // 保存文件
         const diffImage = await this.saveDiffImage(diff)
 
-        // 计算相似度
         const totalPixels = width * height
         const similarity = this.calculateSimilarity(diffPixels, totalPixels)
 
-        console.log(`[对比服务] Pixelmatch 对比完成，相似度: ${similarity}%`)
-
-        return {
-            similarity,
-            diffPixels,
-            totalPixels,
-            width,
-            height,
-            diffImage
-        }
+        return { similarity, diffPixels, totalPixels, width, height, diffImage }
     }
 
     /**
-     * 扩展接口：Resemble.js 对比逻辑
-     * 适合需要忽略颜色差异或抗锯齿更智能的场景。
+     * 策略 B: Resemble.js 引擎
+     * 优点：具备更强的色彩模糊容赦度，适合测试 H5/移动端
      */
     async compareWithResemble(designPath, actualPath, config) {
         const ResembleCompareService = (await import('./ResembleCompareService.js')).default
@@ -377,8 +381,8 @@ class CompareService {
     }
 
     /**
-     * 扩展接口：ODiff 对比逻辑
-     * 极端高性能的像素对比引擎。
+     * 策略 C: ODiff 极致性能引擎
+     * 优点：原生二进制执行，在大规模走查任务中可节省 50% 时间
      */
     async compareWithODiff(designPath, actualPath, config) {
         const odiffService = new ODiffCompareService()

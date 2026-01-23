@@ -19,7 +19,8 @@
         "puppeteer": "^24.35.0",
         "resemblejs": "^5.0.0",
         "sharp": "^0.34.5",
-        "ws": "^8.19.0"
+        "ws": "^8.19.0",
+        "zod": "^4.3.5"
     },
     "devDependencies": {
         "@types/node": "^25.0.8",

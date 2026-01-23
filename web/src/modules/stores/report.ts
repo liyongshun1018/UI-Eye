@@ -7,35 +7,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { compareAPI } from '@core/api/compare'
-import type { ApiResponse } from '@core/types'
+import type { ApiResponse, CompareReport } from '@core/types'
 
-export interface CompareReport {
-    id: string
-    timestamp: number
-    status: 'pending' | 'processing' | 'completed' | 'failed'
-    similarity: number
-    diffPixels: number
-    totalPixels: number
-    images: {
-        design: string
-        actual: string
-        diff: string
-    }
-    diffImage?: {
-        path: string
-        url: string
-        annotatedUrl: string
-    }
-    diffRegions?: any[]
-    fixes?: any[]
-    error?: string
-    progress?: number
-    stepText?: string
-    config: {
-        url: string
-        [key: string]: any
-    }
-}
+// 使用 @core/types 中的定义
 
 export const useReportStore = defineStore('report', () => {
     // 状态

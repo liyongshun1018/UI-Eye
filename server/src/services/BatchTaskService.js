@@ -14,25 +14,33 @@ const __filename = fileURLToPath(import.meta.url); // Added __filename definitio
 const __dirname = path.dirname(__filename); // Added __dirname definition
 
 /**
- * 批量任务管理服务
- * 负责创建、执行和管理批量截图任务
+ * BatchTaskService - 批量走查任务调度服务
+ * 
+ * 职责：
+ * 1. 任务建模：定义并维护批量任务（batch_tasks）与其明细条目（batch_task_items）的 1:N 关系。
+ * 2. 持久化层：管理 SQLite 数据库表结构的初始化与增量 Migration（版本补全）。
+ * 3. 异步流水线：利用 pLimit 限制并发压力，调度 CompareTaskService 执行原子级别的 UI 比对。
+ * 4. 实时通信：通过 WebSocket 广播任务阶段进度，并保持主从表数据的强一致性映射。
  */
 class BatchTaskService {
     constructor() {
         this.db = getDatabase();
         this.authService = new AuthService();
         this.scriptService = new ScriptService();
-        this.runningTasks = new Map(); // 存储正在运行的任务
+        this.runningTasks = new Map(); // 内存索引：跟踪当前活跃的任务 ID
 
-        // 初始化批量任务表
+        // 系统启动时自动对齐数据库 Schema
         this.initializeTable();
     }
 
     /**
-     * 初始化批量任务相关表结构
+     * 基础设施层：数据库 Schema 初始化与平滑演进
+     * 逻辑：
+     * 1. 确保核心表 batch_tasks 与明细表 batch_task_items 存在。
+     * 2. 执行原子级 Migration，动态补充由于版本迭代增加的 AI、进度条、配置镜像等字段。
      */
     initializeTable() {
-        // 1. 创建或更新主任务表
+        // 主任务索引表：记录任务元数据、统计总量与平均相似度
         const createTasksSQL = `
       CREATE TABLE IF NOT EXISTS batch_tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +67,10 @@ class BatchTaskService {
     `;
         this.db.exec(createTasksSQL);
 
-        // 补全旧表缺失字段 (Migration)
+        /**
+         * 动态 Schema 演进记录清单
+         * 随着系统从 1.0 演进至 2.0，逐步增加了 AI 诊断、视觉进度、子任务吸附等字段。
+         */
         const columns = [
             { name: 'script_id', type: 'INTEGER' },
             { name: 'design_mode', type: "TEXT DEFAULT 'single'" },
@@ -77,11 +88,11 @@ class BatchTaskService {
             try {
                 this.db.exec(`ALTER TABLE batch_tasks ADD COLUMN ${col.name} ${col.type}`);
             } catch (e) {
-                // 列可能已存在
+                // 静默忽略“列已存在”的异常，实现幂等的 Schema 更新
             }
         }
 
-        // 2. 创建任务明细表
+        // 任务条目明细表：具体到每一个 URL 的执行结果与报告挂载
         const createItemsSQL = `
             CREATE TABLE IF NOT EXISTS batch_task_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,21 +112,16 @@ class BatchTaskService {
         `;
         this.db.exec(createItemsSQL);
 
-        // 创建索引
+        // 初始化空间索引，加速高频查询
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_batch_tasks_status ON batch_tasks(status)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_batch_tasks_created_at ON batch_tasks(created_at DESC)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_batch_task_items_task_id ON batch_task_items(task_id)');
 
-        console.log('✅ 批量任务数据库架构初始化完成');
+        console.log('✅ 批量任务核心持久化架构已就绪');
     }
 
     /**
-     * 创建批量任务
-     * @param {string} name - 任务名称
-     * @param {Array<string>} urls - URL 列表
-     * @param {string|null} domain - 登录域名（可选）
-     * @param {Object} options - 截图和对比选项
-     * @returns {number} 任务 ID
+     * 第一阶段：任务编排与入库
      */
     createTask(name, urls, domain = null, options = {}) {
         const stmt = this.db.prepare(`
@@ -140,14 +146,13 @@ class BatchTaskService {
 
         const taskId = result.lastInsertRowid;
 
-        // 创建任务明细记录
+        // 镜像备份：将 URL 集群展开为具体的子条目
         if (urls && urls.length > 0) {
             const itemStmt = this.db.prepare(`
                 INSERT INTO batch_task_items (task_id, url, design_source)
                 VALUES (?, ?, ?)
             `);
 
-            // 获取每个 URL 对应的设计稿（多图模式支持）
             const urlDesignMap = options.urlDesignMap || {};
 
             for (const url of urls) {
@@ -156,71 +161,59 @@ class BatchTaskService {
             }
         }
 
-        console.log(`📋 创建批量任务: ${name} (ID: ${taskId})`);
+        console.log(`📋 批量任务注册成功: ${name} (序列号: ${taskId})`);
         return taskId;
     }
 
     /**
-     * 启动批量任务
-     * @param {number} taskId - 任务 ID
-     * @param {Function} onProgress - 进度回调函数
+     * 第二阶段：任务激活与 WebSocket 生命周期绑定
      */
     async startTask(taskId, onProgress = null) {
-        // 检查任务是否已在运行
         if (this.runningTasks.has(taskId)) {
-            throw new Error(`任务 ${taskId} 已在运行中`);
+            throw new Error(`资源独占异常: 任务 ${taskId} 已经在流水线中执行`);
         }
 
-        // 获取任务信息
         const task = this.getTask(taskId);
-        if (!task) {
-            throw new Error(`任务 ${taskId} 不存在`);
+        if (!task || task.status !== 'pending') {
+            throw new Error(`执行准入失败: 任务 ${taskId} 不存在或当前不处于待命状态`);
         }
 
-        if (task.status !== 'pending') {
-            throw new Error(`任务 ${taskId} 状态不是 pending，无法启动`);
-        }
-
-        // 更新状态为 running
         this.updateTaskStatus(taskId, 'running');
-
-        // 通过 WebSocket 广播任务启动
         wsServer.broadcastTaskUpdate(taskId, 'task:started', { taskId, status: 'running' });
-
-        // 标记为运行中
         this.runningTasks.set(taskId, true);
 
-        // 异步执行任务
+        // 启动异步执行引擎
         this.executeTask(taskId, onProgress).catch(error => {
-            console.error(`任务 ${taskId} 执行失败: `, error);
+            console.error(`[执行引擎] 任务 ${taskId} 抛出致命错误: `, error);
             this.updateTaskStatus(taskId, 'failed', error.message);
         }).finally(() => {
             this.runningTasks.delete(taskId);
         });
 
-        console.log(`🚀 启动批量任务: ${taskId} `);
+        console.log(`🚀 任务流水线已点火: ${taskId}`);
     }
 
     /**
-     * 执行批量任务
-     * @param {number} taskId - 任务 ID
-     * @param {Function} onProgress - 进度回调函数
+     * 第三阶段：核心调度引擎
+     * 设计考量：
+     * 1. 资源节制：通过 pLimit(3) 将 Puppeteer 并发限制在 3 个，防止爆 CPU/内存。
+     * 2. 原子委托：将每一个 URL 包装为子 Config，委托给 CompareTaskService 执行。
+     * 3. 实时落库：子任务每一个步骤的变化都要实时写入 DB，确保用户刷新页面时进度条能断点续传。
      */
     async executeTask(taskId, onProgress = null) {
         const task = this.getTask(taskId);
         const urls = task.urls;
         const startTime = Date.now();
-        const limit = pLimit(3); // 限制并发数为 3
+        const limit = pLimit(3);
 
         try {
-            console.log(`[BatchService] 🚀 启动标准化流水线: 任务 ${taskId}, 模式=${task.designMode}`);
+            console.log(`[BatchService] 启动执行链条: 模式=${task.designMode}`);
 
-            // 构造原子任务集
             const jobs = urls.map((url, index) => {
                 return limit(async () => {
                     const currentUrl = url;
 
-                    // 广播当前处理中的 URL
+                    // 广播当前正在处理的节点
                     wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
                         phase: 'processing',
                         current: index + 1,
@@ -228,7 +221,6 @@ class BatchTaskService {
                         currentUrl
                     });
 
-                    // 准备单个子任务的配置
                     const subConfig = {
                         url,
                         designSource: task.designMode === 'multiple' ? (task.urlDesignMap?.[url] || task.designSource) : task.designSource,
@@ -238,14 +230,14 @@ class BatchTaskService {
                         index
                     };
 
-                    // 调用统一的原子执行器
+                    // 核心委托：调用标准原子执行器
                     const result = await CompareTaskService.execute(subConfig, {
                         onProgress: (p) => {
-                            // 实时同步子任务阶段进度给批量 UI，并实时落库持久化
                             const phase = p.currentPhase || 'processing';
                             const progress = p.progress || 0;
                             const stepText = p.stepText || '';
 
+                            // 实时同步主任务的执行文本到数据库
                             this.db.prepare(`
                                 UPDATE batch_tasks 
                                 SET current_phase = ?, progress = ?, step_text = ?
@@ -253,9 +245,7 @@ class BatchTaskService {
                             `).run(phase, progress, stepText, taskId);
 
                             wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
-                                phase,
-                                progress,
-                                stepText,
+                                phase, progress, stepText,
                                 currentUrl: url,
                                 current: index + 1,
                                 total: urls.length
@@ -263,11 +253,10 @@ class BatchTaskService {
                         }
                     });
 
-                    // 持久化子条目结果并透传给前端
+                    // 后置处理：明细落库并更新主表统计汇总
                     if (result.success) {
                         const finalItemResult = {
-                            url,
-                            success: true,
+                            url, success: true,
                             reportId: result.reportId,
                             similarity: result.similarity,
                             diffCount: result.diffRegions?.length || 0,
@@ -281,40 +270,28 @@ class BatchTaskService {
                                 similarity = ?, diff_count = ?, completed_at = CURRENT_TIMESTAMP
                             WHERE task_id = ? AND url = ?
                         `).run(
-                            result.images.actual,
-                            result.reportId,
-                            result.similarity,
+                            result.images.actual, result.reportId, result.similarity,
                             result.diffRegions ? result.diffRegions.length : 0,
-                            taskId,
-                            url
+                            taskId, url
                         );
 
-                        // 核心加固：实时同步统计到主表，解决刷新归零
-                        const items = this.db.prepare('SELECT similarity, diff_count FROM batch_task_items WHERE task_id = ? AND status = ?').all(taskId, 'completed');
-                        if (items.length > 0) {
-                            this.db.prepare(`
-                                UPDATE batch_tasks 
-                                SET total_diff_count = (SELECT SUM(diff_count) FROM batch_task_items WHERE task_id = ? AND status = 'completed'),
-                                    avg_similarity = (SELECT AVG(similarity) FROM batch_task_items WHERE task_id = ? AND status = 'completed')
-                                WHERE id = ?
-                            `).run(taskId, taskId, taskId);
-                        }
+                        // 实时聚合汇总：平均相似度与差异总计回填至主表，确保总览仪表盘准确
+                        this.db.prepare(`
+                            UPDATE batch_tasks 
+                            SET total_diff_count = (SELECT SUM(diff_count) FROM batch_task_items WHERE task_id = ? AND status = 'completed'),
+                                avg_similarity = (SELECT AVG(similarity) FROM batch_task_items WHERE task_id = ? AND status = 'completed')
+                            WHERE id = ?
+                        `).run(taskId, taskId, taskId);
 
-                        // 核心：子项完成后发送“含金量”消息，触发表格刷新
+                        // 触发表格行数据热更新
                         wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
-                            phase: 'finish',
-                            progress: 100,
-                            currentUrl: url,
-                            current: index + 1,
-                            total: urls.length,
-                            lastResult: {
-                                ...finalItemResult,
-                                diffCount: finalItemResult.diffCount // 明确字段名
-                            }
+                            phase: 'finish', progress: 100, currentUrl: url,
+                            current: index + 1, total: urls.length,
+                            lastResult: finalItemResult
                         });
 
                     } else {
-                        const failedResult = { url, success: false, error: result.error, status: 'failed' };
+                        // 失败逻辑记录
                         this.db.prepare(`
                             UPDATE batch_task_items 
                             SET error_message = ?, status = 'failed', completed_at = CURRENT_TIMESTAMP
@@ -322,16 +299,13 @@ class BatchTaskService {
                         `).run(result.error, taskId, url);
 
                         wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
-                            phase: 'finish',
-                            progress: 0,
-                            currentUrl: url,
-                            current: index + 1,
-                            total: urls.length,
-                            lastResult: failedResult
+                            phase: 'finish', progress: 0, currentUrl: url,
+                            current: index + 1, total: urls.length,
+                            lastResult: { url, success: false, error: result.error, status: 'failed' }
                         });
                     }
 
-                    // 更新任务总体进度（成功数）
+                    // 更新任务总体达成数
                     const currentStats = this.db.prepare('SELECT COUNT(*) as count FROM batch_task_items WHERE task_id = ? AND status = ?').get(taskId, 'completed');
                     this.updateTaskProgress(taskId, currentStats.count, urls.length);
 
@@ -339,10 +313,9 @@ class BatchTaskService {
                 });
             });
 
-            // 等待所有原子任务完成
-            const results = await Promise.all(jobs);
+            await Promise.all(jobs);
 
-            // 统计分析并归档主任务
+            // 第四阶段：成果归档分析
             const duration = ((Date.now() - startTime) / 1000).toFixed(2);
             const stats = this.db.prepare(`
                 SELECT 
@@ -359,29 +332,19 @@ class BatchTaskService {
                 UPDATE batch_tasks 
                 SET status = 'completed', 
                     completed_at = CURRENT_TIMESTAMP,
-                    success = ?,
-                    failed = ?,
-                    duration = ?,
-                    avg_similarity = ?,
-                    total_diff_count = ?,
-                    results = ?
+                    success = ?, failed = ?, duration = ?, 
+                    avg_similarity = ?, total_diff_count = ?, results = ?
                 WHERE id = ?
             `).run(
-                stats.success || 0,
-                stats.failed || 0,
-                duration,
-                stats.avg_similarity || 0,
-                stats.total_diff_count || 0,
-                JSON.stringify(results),
-                taskId
+                stats.success || 0, stats.failed || 0, duration,
+                stats.avg_similarity || 0, stats.total_diff_count || 0,
+                JSON.stringify(results), taskId
             );
 
-            console.log(`✅ 标准化任务 ${taskId} 完成: 成功 ${stats.success}/${urls.length}`);
+            console.log(`✅ 批量任务 ${taskId} 结算完成: 链路通过率 ${(stats.success / urls.length * 100).toFixed(1)}%`);
 
             wsServer.broadcastTaskUpdate(taskId, 'task:completed', {
-                taskId,
-                status: 'completed',
-                duration,
+                taskId, status: 'completed', duration,
                 compare: {
                     successCount: stats.success || 0,
                     failedCount: stats.failed || 0,
@@ -393,7 +356,7 @@ class BatchTaskService {
             });
 
         } catch (error) {
-            console.error(`❌ 任务 ${taskId} 严重故障:`, error);
+            console.error(`❌ 对比链路发生熔断: ${taskId}`, error);
             this.updateTaskStatus(taskId, 'failed', error.message);
             wsServer.broadcastTaskUpdate(taskId, 'task:failed', { taskId, error: error.message });
             throw error;
@@ -401,10 +364,7 @@ class BatchTaskService {
     }
 
     /**
-     * 更新任务状态
-     * @param {number} taskId - 任务 ID
-     * @param {string} status - 状态
-     * @param {string} errorMessage - 错误信息（可选）
+     * 更新任务物理状态
      */
     updateTaskStatus(taskId, status, errorMessage = null) {
         const updates = ['status = ?'];
@@ -423,48 +383,29 @@ class BatchTaskService {
 
         values.push(taskId);
 
-        const stmt = this.db.prepare(`
-      UPDATE batch_tasks 
-      SET ${updates.join(', ')}
-      WHERE id = ?
-    `);
-
-        stmt.run(...values);
+        this.db.prepare(`UPDATE batch_tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
     }
 
     /**
-     * 更新任务进度
-     * @param {number} taskId - 任务 ID
-     * @param {number} success - 成功数
-     * @param {number} total - 总数
+     * 更新进度快照
      */
     updateTaskProgress(taskId, success, total) {
-        const stmt = this.db.prepare(`
-      UPDATE batch_tasks 
-      SET success = ?
-      WHERE id = ?
-    `);
-
-        stmt.run(success, taskId);
+        this.db.prepare(`UPDATE batch_tasks SET success = ? WHERE id = ?`).run(success, taskId);
     }
 
     /**
-     * 获取任务详情
-     * @param {number} taskId - 任务 ID
-     * @returns {Object|null} 任务信息
+     * 获取增强版任务详情
+     * 特性：实时从子表拉取最新明细，覆盖掉由于异步延迟导致的主表结果字段落后。
      */
     getTask(taskId) {
         const stmt = this.db.prepare('SELECT * FROM batch_tasks WHERE id = ?');
         const row = stmt.get(taskId);
 
-        if (!row) {
-            return null;
-        }
+        if (!row) return null;
 
         const task = this.parseTaskRow(row);
 
-        // 核心增强：无论 results 是否存在，始终从明细表实时拉取最新明细
-        // 这样可以确保即便是从缓存加载的主任务，也能获得包含完整 URL 和实时进度的 details
+        // 强耦合对齐：从明细表通过任务 ID 反查全量子序列
         const itemsStmt = this.db.prepare('SELECT * FROM batch_task_items WHERE task_id = ? ORDER BY id ASC');
         const items = itemsStmt.all(taskId);
 
@@ -481,13 +422,12 @@ class BatchTaskService {
                 completed_at: item.completed_at
             }));
 
-            // 无论任务是否完成，都基于明细表重新校准统计量，防止主表字段更新延迟
+            // 实时校准统计值，解决“数据漂移”问题
             task.success = items.filter(i => i.status === 'completed').length;
             task.failed = items.filter(i => i.status === 'failed').length;
 
             const completedItems = items.filter(i => i.status === 'completed' && i.similarity !== null);
             if (completedItems.length > 0) {
-                // 如果主表的 total_diff_count 为 0 但明细有数据，优先使用累加值
                 const calculatedDiffs = completedItems.reduce((sum, i) => sum + (i.diff_count || 0), 0);
                 task.totalDiffCount = task.totalDiffCount || calculatedDiffs;
 
@@ -500,16 +440,10 @@ class BatchTaskService {
     }
 
     /**
-     * 获取任务列表
-     * @param {Object} options - 查询选项
-     * @returns {Array} 任务列表
+     * 获取任务列表（流式查询）
      */
     getTaskList(options = {}) {
-        const {
-            status = null,
-            limit = 20,
-            offset = 0
-        } = options;
+        const { status = null, limit = 20, offset = 0 } = options;
 
         let sql = 'SELECT * FROM batch_tasks';
         const params = [];
@@ -522,16 +456,12 @@ class BatchTaskService {
         sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
 
-        const stmt = this.db.prepare(sql);
-        const rows = stmt.all(...params);
-
+        const rows = this.db.prepare(sql).all(...params);
         return rows.map(row => this.parseTaskRow(row));
     }
 
     /**
-     * 获取任务总数
-     * @param {string|null} status - 状态过滤
-     * @returns {number} 总数
+     * 获取总量统计
      */
     getTaskCount(status = null) {
         let sql = 'SELECT COUNT(*) as count FROM batch_tasks';
@@ -542,63 +472,58 @@ class BatchTaskService {
             params.push(status);
         }
 
-        const stmt = this.db.prepare(sql);
-        const result = stmt.get(...params);
-
+        const result = this.db.prepare(sql).get(...params);
         return result.count;
     }
 
     /**
-     * 删除任务
-     * @param {number} taskId - 任务 ID
+     * 级联删除任务
      */
     deleteTask(taskId) {
-        // 检查任务是否正在运行
         if (this.runningTasks.has(taskId)) {
-            throw new Error(`任务 ${taskId} 正在运行中，无法删除`);
+            throw new Error(`权限受限: 任务 ${taskId} 正在活跃执行中，不可执行销毁操作`);
         }
 
-        const stmt = this.db.prepare('DELETE FROM batch_tasks WHERE id = ?');
-        const result = stmt.run(taskId);
+        const result = this.db.prepare('DELETE FROM batch_tasks WHERE id = ?').run(taskId);
 
         if (result.changes === 0) {
-            throw new Error(`任务 ${taskId} 不存在`);
+            throw new Error(`目标缺失: 任务 ${taskId} 已在之前的操作中被移除`);
         }
 
-        console.log(`🗑️  删除任务: ${taskId}`);
+        console.log(`🗑️  任务清理成功: ${taskId}`);
     }
 
     /**
-     * 解析数据库行为任务对象
-     * @param {Object} row - 数据库行
-     * @returns {Object} 任务对象
+     * 数据对象转换层 (DAO -> DTO)
      */
     parseTaskRow(row) {
+        const total = row.total || 0;
+        const success = row.success || 0;
         return {
             id: row.id,
             name: row.name,
-            urls: JSON.parse(row.urls),
+            urls: JSON.parse(row.urls || '[]'),
             domain: row.domain,
             status: row.status,
-            total: row.total,
-            success: row.success,
+            total,
+            success,
             failed: row.failed,
             duration: row.duration,
-            progress: row.total > 0 ? Math.round((row.success / row.total) * 100) : 0,
+            // 实时进度计算公式
+            progress: row.status === 'completed' ? 100 : (total > 0 ? Math.round((success / total) * 100) : 0),
             createdAt: row.created_at,
             startedAt: row.started_at,
             completedAt: row.completed_at,
             results: row.results ? JSON.parse(row.results) : null,
             errorMessage: row.error_message,
-            script_id: row.script_id,
+            scriptId: row.script_id,
             designMode: row.design_mode,
             designSource: row.design_source,
             compareConfig: row.compare_config ? JSON.parse(row.compare_config) : null,
             aiModel: row.ai_model,
             avgSimilarity: row.avg_similarity,
             totalDiffCount: row.total_diff_count,
-            currentPhase: row.current_phase || (row.status === 'completed' ? 'finish' : 'init'),
-            progress: row.status === 'completed' ? 100 : (row.progress || 0),
+            currentPhase: row.current_phase || (row.status === 'completed' ? 'finish' : (row.status === 'running' ? 'processing' : 'init')),
             stepText: row.step_text
         };
     }

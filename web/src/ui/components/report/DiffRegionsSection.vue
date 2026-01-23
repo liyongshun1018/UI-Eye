@@ -79,7 +79,7 @@ import DiffRegionsTable from './DiffRegionsTable.vue'
 
 /**
  * 组件属性
- * @property {Array} regions - 由后端分析出的差异区域数组
+ * @property {Array<import('@core/types').DiffRegion>} regions - 由后端分析出的差异区域数组
  */
 const props = defineProps({
   regions: {

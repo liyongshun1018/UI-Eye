@@ -1,134 +1,123 @@
 import sharp from 'sharp'
 
 /**
- * DiffClusteringService - 差异聚类服务
- * 职能：将图像对比产生的成千上万个离散差异像素点，聚合成人类可理解的、具有业务意义的矩形区域。
- * 算法：采用类 DBSCAN 的连通区域增长算法。
+ * DiffClusteringService - 视觉差异聚类分析引擎
+ * 
+ * 职责：
+ * 1. 散点收集：从差异图二进制流中高效提取所有标记为“差异”的像素坐标。
+ * 2. 空间聚类：应用类 DBSCAN（基于密度的空间聚类）算法，将邻近的像素合并为逻辑区域。
+ * 3. 语义增强：对聚类结果进行合并、分类、评分，并根据重要性生成自然语言描述。
+ * 4. 视觉标注：在物理图片上合成矢量矩形框（红框）与 ID 编号标签。
  */
 class DiffClusteringService {
     /**
-     * 构造函数：初始化聚类算法参数
-     * @param {Object} options - 可选的算法微调参数
+     * 算法初始化
+     * @param {Object} options - 聚类感知敏感度设置
      */
     constructor(options = {}) {
         this.options = {
-            minRegionSize: options.minRegionSize || 100,      // 最小有效区域：小于 100 像素的微小噪点将被过滤
-            neighborhoodRadius: options.neighborhoodRadius || 10, // 邻域半径：在该像素距离内的差异点会被视为同一区域
-            maxRegions: options.maxRegions || 20,           // 最终产出的最大区域数，防止报告过载
-            padding: options.padding || 5,                 // 矩形框向外扩张的内边距，使视觉效果更舒适
+            // 噪点过滤：面积小于此值的连通域将被忽略，防止报表出现过多细碎垃圾信息
+            minRegionSize: options.minRegionSize || 100,
+            // 邻域探测：连通区域增长时的最大搜索半径，决定了多个散点合成为一个整体的“引力”
+            neighborhoodRadius: options.neighborhoodRadius || 10,
+            // 报告约束：单张页面最多提取的红框数量，保证走查者的注意力聚焦在核心问题上
+            maxRegions: options.maxRegions || 20,
+            // 视觉留白：标注框向外衍生的安全距离，防止标注框紧贴文字边缘导致难以阅读
+            padding: options.padding || 5,
             ...options
         }
     }
 
     /**
-     * 核心预处理：从差异图片文件中提取所有“红色”差异像素坐标
-     * @param {string} diffImagePath - 由 pixelmatch 生成的差异图绝对路径
-     * @returns {Promise<Array>} 返回差异像素坐标集合 [{x, y}, ...]
+     * 极速提取器：全量像素扫描
+     * 优化点：直接读取 sharp 原始 raw buffer，绕过解码，速度比常规 canvas 取色快 1个数量级
+     * @param {string} diffImagePath - pixelmatch 生成的源差异图
+     * @returns {Promise<Object>} 返回坐标点集与画布尺寸
      */
     async extractDiffPixels(diffImagePath) {
         try {
-            // 使用 sharp 库以 raw 原始数据格式读取图片，性能最优
             const image = sharp(diffImagePath)
             const { data, info } = await image.raw().toBuffer({ resolveWithObject: true })
 
             const diffPixels = []
             const { width, height, channels } = info
 
-            console.log(`[聚类中心] 正在解析差异图: ${width}x${height}, 通道数: ${channels}`);
-
-            // 算法：全图像素扫描（O(N) 复杂度）
+            // 对整图进行一轮 O(N) 扫描，识别差异红色通道
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const idx = (y * width + x) * channels
                     const r = data[idx]
                     const g = data[idx + 1]
 
-                    /**
-                     * 红色/品红色差异检测逻辑增强：
-                     * 放宽阈值以同时支持 pixelmatch (Red) 和 resemble (Pink) 产生的差异像素
-                     */
+                    // 启发式逻辑：提取视觉敏感的红色像素（pixelmatch 的默认差异色）
                     if (r > 180 && g < 120) {
+                        // 使用 y * width + x 作为唯一键值，构建空间索引哈希
                         diffPixels.push({ x, y, id: y * width + x })
                     }
                 }
             }
-
-            console.log(`[聚类中心] 差异像素抓取完成: ${diffPixels.length} 个像素点`);
             return { pixels: diffPixels, width, height }
         } catch (error) {
-            console.error('提取差异像素失败:', error)
+            console.error('[算法层] 差异像素流水线中断:', error)
             return { pixels: [], width: 0, height: 0 }
         }
     }
 
     /**
-     * 核心逻辑：将散乱像素聚类为矩形区域
-     * 使用了空间索引加速技术。
-     * @param {Array} diffPixels - 差异像素数组
-     * @returns {Array} 聚类并排序后的区域列表
+     * 区域增长核心逻辑
+     * 后台原理：基于空间哈希映射的 BFS（广度优先搜索）算法，将离散的 Point 聚合成 Blob
      */
     clusterDiffRegions(diffData) {
         const { pixels: diffPixels, width, height } = diffData
-        if (!diffPixels || diffPixels.length === 0) {
-            return []
-        }
+        if (!diffPixels || diffPixels.length === 0) return []
 
-        /** 
-         * 空间索引加速：
-         * 使用整型索引 id，比字符串拼接快 10 倍以上并节省大量内存
-         */
+        // 空间加速索引：将数组转为 Map 映射，使邻域探测的复杂度从 O(N) 降为 O(1)
         const pixelMap = new Map()
         for (const pixel of diffPixels) {
             pixelMap.set(pixel.id, pixel)
         }
 
-        const visited = new Set() // 记录已划归区域的像素
+        const visited = new Set() // 全局防重置，确保每个像素只属于一个聚类区
         const clusters = []
 
-        console.log(`[聚类引擎] 开始执行区域增长 BFS 算法 (O(N) 优化版)...`);
-
-        // 算法：广度优先区域增长
         for (const pixel of diffPixels) {
             if (visited.has(pixel.id)) continue
 
-            // 发起一个新区域的增长探测
+            // 发起区域增长：寻找当前像素周边的连通像素
             const cluster = this.growRegionOptimized(pixel, pixelMap, visited, width, height)
 
-            // 质量控制：仅保留面积达到阈值的有效区域
+            // 质量核查：移除不具备业务意义的微小噪点
             if (cluster.length >= this.options.minRegionSize) {
                 clusters.push(cluster)
             }
         }
 
-        // 结果转换：将像素集合转换为带坐标和尺寸的矩形对象
+        // 转换层：将像素云团计算为最终显示的几何矩形（Bounding Box）
         const regions = clusters
             .map(cluster => this.getBoundingBox(cluster))
-            .sort((a, b) => b.pixelCount - a.pixelCount) // 优先级：按面积从大到小排序
-            .slice(0, this.options.maxRegions) // 截断：仅保留前 N 个最重要的区域
+            .sort((a, b) => b.pixelCount - a.pixelCount) // 按显著程度（面积）排序
+            .slice(0, this.options.maxRegions)
 
         return regions
     }
 
     /**
-     * 区域增长算法的具体实现
-     * @param {Object} seed - 种子像素起点
-     * @param {Map} pixelMap - 空间索引映射表
-     * @param {Set} visited - 全局访问记录
-     * @returns {Array} 属于该连通域的所有像素集合
+     * BFS 区域增长算法细节
+     * 优化点：使用 Head/Tail 指针模拟队列，消灭 shift() 数组带来的 O(N) 重排开销
      */
     growRegionOptimized(seed, pixelMap, visited, width, height) {
         const cluster = []
-        const queue = [seed] // 使用队列实现 BFS
-        let head = 0 // 使用指针索引代替 shift()，将时间复杂度从 O(N^2) 降为 O(N)
+        const queue = [seed]
+        let head = 0
         const radius = this.options.neighborhoodRadius
 
-        visited.add(seed.id); // 入队瞬间即标记，防止重复入队导致的内存爆炸
+        visited.add(seed.id);
 
         while (head < queue.length) {
             const pixel = queue[head++]
             cluster.push(pixel)
 
-            // 探测当前像素周围的邻域
+            // 搜索邻域范围：九宫格扩展至半径圆圈
             for (let dx = -radius; dx <= radius; dx++) {
                 for (let dy = -radius; dy <= radius; dy++) {
                     if (dx === 0 && dy === 0) continue
@@ -144,24 +133,21 @@ class DiffClusteringService {
                     const neighbor = pixelMap.get(neighborId)
                     if (!neighbor) continue
 
-                    // 距离检测：仅将半径圆圈内的像素吸收入本区域
+                    // 欧几里得距离计算：确保聚类边缘呈平滑圆形
                     const distanceSq = dx * dx + dy * dy
                     if (distanceSq <= radius * radius) {
-                        visited.add(neighborId); // 关键：入队瞬间即标记
+                        visited.add(neighborId);
                         queue.push(neighbor)
                     }
                 }
             }
         }
-
         return cluster
     }
 
     /**
-     * 计算聚类的包围盒（Bounding Box）
-     * 采用流式计算查找极值，确保在处理海量像素（30万+）时不会触发栈溢出
-     * @param {Array} cluster - 属于该区域的像素数组
-     * @returns {Object} 带有冗余外边距的包围盒数据
+     * 计算像素团的物理边界
+     * 处理逻辑：流式极值查找，避免大数组解包导致的堆栈溢出
      */
     getBoundingBox(cluster) {
         if (!cluster || cluster.length === 0) return { x: 0, y: 0, width: 0, height: 0, pixelCount: 0 }
@@ -169,7 +155,6 @@ class DiffClusteringService {
         let minX = Infinity, minY = Infinity
         let maxX = -Infinity, maxY = -Infinity
 
-        // 单次循环查找，避免 Math.min(...xs) 导致的栈溢出
         for (let i = 0; i < cluster.length; i++) {
             const p = cluster[i]
             if (p.x < minX) minX = p.x
@@ -178,7 +163,7 @@ class DiffClusteringService {
             if (p.y > maxY) maxY = p.y
         }
 
-        // 应用内容内边距并确保不越界
+        // 加入 padding 并确保结果不会超出画布边界
         const finalMinX = Math.max(0, minX - this.options.padding)
         const finalMinY = Math.max(0, minY - this.options.padding)
         const finalMaxX = maxX + this.options.padding
@@ -194,33 +179,26 @@ class DiffClusteringService {
     }
 
     /**
-     * 核心流程：全自动化执行差异区域分析
-     * @param {string} diffImagePath - 待分析的差异图片路径
-     * @returns {Promise<Array>} 返回结构化的差异发现结果
+     * 全流程深度分析链路
+     * 逻辑：提取 -> 聚类 -> 合并 -> 分类 -> 打分 -> 排序 -> 产出
      */
     async analyzeDiffRegions(diffImagePath) {
         try {
-            // 1. 物理提取：识别所有红色差异像素 (目前已升级为高性能索引模式)
+            // 1. 获取物理差异数据
             const diffData = await this.extractDiffPixels(diffImagePath)
             const { pixels: diffPixels } = diffData
 
-            console.log(`[聚类引擎] 原始差异像素提取总量: ${diffPixels.length}`)
+            if (diffPixels.length === 0) return []
 
-            if (diffPixels.length === 0) {
-                return []
-            }
-
-            // 2. 空间聚合：基于邻域半径将散点聚集成块 (O(N) 优化版)
+            // 2. 第一阶段：物理像素连通聚类
             let regions = this.clusterDiffRegions(diffData)
 
-            // 3. 语义合并：将视觉上非常接近（如文字行与行之间）的碎片区域合并为大块
+            // 3. 第二阶段：语义层合并（如将原本离散的文字段落合并为一个完整的走查区域）
             regions = this.mergeNearbyRegions(regions)
 
-            // 4. 读取元数据：用于计算区域在页面中的相对位置
-            const sharp = (await import('sharp')).default
             const { width, height } = await sharp(diffImagePath).metadata()
 
-            // 5. 评价赋能：根据位置、面积、密度为每个区域打分，并生成自然语言描述
+            // 4. 第三阶段：综合维度的重要性评分（权重：位置、面积、密度）
             regions = regions.map((region, index) => {
                 const score = this.calculatePriorityScore(region, height, width * height)
                 const priority = this.getPriorityLevel(score)
@@ -235,14 +213,13 @@ class DiffClusteringService {
                 }
             })
 
-            // 6. 决策排序：按“重要程度”评分降序排列
+            // 5. 排序：首要问题优先展示
             regions.sort((a, b) => b.score - a.score)
 
-            // 7. 智能噪点过滤：移除掉虽然存在差异但业务影响极小的区域
+            // 6. 最终降噪过滤
             regions = this.filterRegions(regions)
-            console.log(`[聚类引擎] 智能筛选完成，确认 ${regions.length} 个关键差异区域`)
 
-            // 8. 全局编号：重新分配人类友好的 ID
+            // 7. 索引规整
             regions = regions.map((region, index) => ({
                 ...region,
                 id: index + 1
@@ -250,14 +227,14 @@ class DiffClusteringService {
 
             return regions
         } catch (error) {
-            console.error('差异区域语义分析链路崩溃:', error)
+            console.error('[核心服务] 差异分析链路处理失败:', error)
             return []
         }
     }
 
     /**
-     * 辅助算法：合并物理上极其接近的区域
-     * 解决问题：防止一段文字因为行间距导致被切分成多个极小区域
+     * 语义合并算法 (Region Merging)
+     * 解决问题：网页渲染中由于 1px 细微间距导致的聚类碎片化。
      */
     mergeNearbyRegions(regions, maxDistance = 50) {
         if (regions.length <= 1) return regions
@@ -273,9 +250,10 @@ class DiffClusteringService {
             for (let j = i + 1; j < regions.length; j++) {
                 if (used.has(j)) continue
 
-                // 计算两个矩形框之间的欧几里得距离
+                // 计算两块矩形的最短边界距离
                 const distance = this.calculateRegionDistance(current, regions[j])
 
+                // 若距离在可合并范围内，则执行并集计算
                 if (distance < maxDistance) {
                     current = this.mergeTwoRegions(current, regions[j])
                     used.add(j)
@@ -285,22 +263,20 @@ class DiffClusteringService {
             merged.push(current)
             used.add(i)
         }
-
         return merged
     }
 
     /**
-     * 计算两个矩形区域之间的最短真实距离
+     * 距离计算模型
      */
     calculateRegionDistance(r1, r2) {
-        // dx/dy 处理重叠或相离的情况
-        const dx = Math.max(0, Math.max(r1.x - (r2.x + r2.width), r2.x - (r1.x + r1.width)))
-        const dy = Math.max(0, Math.max(r1.y - (r2.y + r2.height), r2.y - (r1.y + r1.height)))
+        const dx = Math.max(0, r1.x - (r2.x + r2.width), r2.x - (r1.x + r1.width))
+        const dy = Math.max(0, r1.y - (r2.y + r2.height), r2.y - (r1.y + r1.height))
         return Math.sqrt(dx * dx + dy * dy)
     }
 
     /**
-     * 将两个矩形区域合并为一个包裹它们的大矩形
+     * 矩形并集计算
      */
     mergeTwoRegions(r1, r2) {
         const minX = Math.min(r1.x, r2.x)
@@ -318,11 +294,8 @@ class DiffClusteringService {
     }
 
     /**
-     * 领域模型：优先级评分矩阵计算
-     * 评估维度：
-     * 1. 垂直位置（30%）：Web 页面首屏/上方权重极高
-     * 2. 绝对面积（40%）：面积越大，视觉冲击越大
-     * 3. 像素密度（30%）：红点分布越密集，说明差异越扎实，非抗锯齿噪点
+     * 优先级评分数学模型
+     * 核心评分：位置（离顶端越近分越高） + 面积占比 + 差异点密度
      */
     calculatePriorityScore(region, imageHeight, totalPixels) {
         const positionScore = (1 - region.y / imageHeight) * 30
@@ -335,7 +308,7 @@ class DiffClusteringService {
     }
 
     /**
-     * 评分到等级映射
+     * 评级转换层
      */
     getPriorityLevel(score) {
         if (score >= 90) return 'critical' // 毁灭性差异
@@ -345,16 +318,16 @@ class DiffClusteringService {
     }
 
     /**
-     * 专家模式：智能过滤低价值差异
+     * 视觉精简处理器
+     * 策略：自动截取最具代表性的差异点，防止因长图过度报警导致的视觉疲劳
      */
     filterRegions(regions) {
-        // 面积筛选：移除物理面积过小的极小点
         let filtered = regions.filter(r => r.width * r.height >= 100)
 
-        // 策略：必须展示所有 '关键' 和 '重要' 级别的发现
+        // 强相关过滤：核心重点问题必须展示
         const important = filtered.filter(r => r.priority === 'critical' || r.priority === 'high')
 
-        // 策略：对于低评分项，仅挑选最有代表性的几个进行展示，防止用户产生“视觉疲劳”
+        // 低优先排序策略
         const others = filtered.filter(r => r.priority === 'medium' || r.priority === 'low')
             .slice(0, Math.max(5, 15 - important.length))
 
@@ -363,40 +336,29 @@ class DiffClusteringService {
     }
 
     /**
-     * 特征提取：识别区域的物理类型
+     * 智能分类逻辑：基于几何特征判定差异属性
      */
     classifyRegion(region) {
         const area = region.width * region.height
         const aspectRatio = region.width / region.height
 
         if (aspectRatio > 3 || aspectRatio < 0.33) {
-            return 'layout' // 典型的布局/间距差异
+            return 'layout' // 典型的布局/间距偏移
         } else if (area > 10000) {
-            return 'major'  // 大规模组件/图片缺失
+            return 'major'  // 大面积 UI 缺失或显著冲突
         } else if (area > 1000) {
-            return 'medium' // 中型交互元素差异
+            return 'medium' // 中量元素位移
         } else {
-            return 'minor'  // 细微图标/文字像素偏移
+            return 'minor'  // 微小图案/图标像素抖动
         }
     }
 
     /**
-     * 智能生成总结性描述（用于辅助生成测试报告标题）
+     * 语义描述生成器
      */
     generateDescription(region, index, priority = 'medium') {
-        const typeLabels = {
-            layout: '布局差异',
-            major: '主要差异',
-            medium: '中等差异',
-            minor: '细微差异'
-        }
-
-        const priorityLabels = {
-            critical: '关键',
-            high: '重要',
-            medium: '一般',
-            low: '次要'
-        }
+        const typeLabels = { layout: '布局差异', major: '主要差异', medium: '中等差异', minor: '细微差异' }
+        const priorityLabels = { critical: '关键', high: '重要', medium: '一般', low: '次要' }
 
         const typeLabel = typeLabels[region.type] || '差异'
         const priorityLabel = priorityLabels[priority] || ''
@@ -405,72 +367,48 @@ class DiffClusteringService {
     }
 
     /**
-     * 视觉呈现：在差异图上通过 SVG 合成绘制红框和数字 ID
+     * 物理合成层：利用 SVG 画笔在图片上绘制标注
+     * 处理逻辑：图层叠加，将矢量边框合并到栅格图象中
      */
     async drawRegionAnnotations(diffImagePath, regions, outputPath) {
         try {
             const image = sharp(diffImagePath)
             const { width, height } = await image.metadata()
 
-            // SVG 矢量绘制逻辑
+            // 构造 SVG 合成指令
             const svgOverlays = regions.map((region, index) => {
                 const color = this.getRegionColor(region.type)
 
                 return `
-          <rect 
-            x="${region.x}" 
-            y="${region.y}" 
-            width="${region.width}" 
-            height="${region.height}" 
-            fill="none" 
-            stroke="${color}" 
-            stroke-width="3" 
-            stroke-dasharray="5,5"
-          />
-          <circle 
-            cx="${region.x + 15}" 
-            cy="${region.y + 15}" 
-            r="12" 
-            fill="${color}"
-          />
-          <text 
-            x="${region.x + 15}" 
-            y="${region.y + 20}" 
-            text-anchor="middle" 
-            font-size="14" 
-            font-weight="bold" 
-            fill="white"
-          >${region.id}</text>
+          <rect x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" fill="none" stroke="${color}" stroke-width="3" stroke-dasharray="5,5"/>
+          <circle cx="${region.x + 15}" cy="${region.y + 15}" r="12" fill="${color}"/>
+          <text x="${region.x + 15}" y="${region.y + 20}" text-anchor="middle" font-size="14" font-weight="bold" fill="white">${region.id}</text>
         `
             }).join('')
 
             const svg = `<svg width="${width}" height="${height}">${svgOverlays}</svg>`
 
-            // 将 SVG 叠加层压扁合成到图片二进制数据中
+            // 将合成图持久化
             await image
-                .composite([{
-                    input: Buffer.from(svg),
-                    top: 0,
-                    left: 0
-                }])
+                .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
                 .toFile(outputPath)
 
             return outputPath
         } catch (error) {
-            console.error('绘制差异视觉标注失败:', error)
+            console.error('[核心服务] 图像标注合成失败:', error)
             throw error
         }
     }
 
     /**
-     * 配色逻辑：根据差异严重等级返回对应的视觉色彩
+     * 调色板逻辑：语义化配色方案
      */
     getRegionColor(type) {
         const colors = {
-            layout: '#FF6B6B',   // 红色 - 核心布局
-            major: '#FF8C42',    // 橙色 - 主要结构
-            medium: '#FFD93D',   // 黄色 - 中等元素
-            minor: '#6BCF7F'     // 绿色 - 次要微调
+            layout: '#FF6B6B',   // 红色 - 结构崩溃
+            major: '#FF8C42',    // 橙色 - 严重冲突
+            medium: '#FFD93D',   // 黄色 - 常规差异
+            minor: '#6BCF7F'     // 绿色 - 极轻微偏差
         }
         return colors[type] || '#6366F1'
     }

@@ -8,9 +8,12 @@ import sharp from 'sharp'
 import { resolveDesignPath, normalizeToPublicUrl } from '../utils/PathUtils.js'
 
 /**
- * CompareTaskService.js - 原子对比任务执行器
- * 核心设计理念：无论是单次对比还是批量对比中的某一项，都应通过此类执行，
- * 确保截图参数、对比算法、AI提示词和数据结构完全一致。
+ * CompareTaskService - 原子任务调度中枢
+ * 
+ * 核心架构意图：
+ * 1. 标准化执行流程：确保“单次对比”与“批量对比中的某一项”共用同一套底层的执行序列。
+ * 2. 状态自动化：封装了从任务排队、初始化、截图、比对到 AI 诊断的全生命周期状态更新。
+ * 3. 复用性：统一管理截图参数、对比阈值和数据转换逻辑，实现结果的高预见性。
  */
 class CompareTaskService {
     constructor() {
@@ -21,21 +24,29 @@ class CompareTaskService {
     }
 
     /**
-     * 执行一个标准的原子对比任务
-     * @param {Object} config - 任务配置 { url, designSource, options, taskId, index }
-     * @param {Object} progressManager - 可选，用于广播进度的回调对象
-     * @returns {Promise<Object>} 运行结果（含 reportId, similarity 等）
+     * 执行标准的原子对比子任务
+     * @param {Object} config - 配置参数对象
+     * @param {string} config.url - 目标网页地址
+     * @param {string} config.designSource - 设计稿路径
+     * @param {Object} [config.options] - 算法参数（阈值等）
+     * @param {string} [config.taskId] - 若属于批量任务，则为父批量任务 ID
+     * @param {number} [config.index] - 在批量序列中的索引位置
+     * @param {string} [config.id] - 强制指定的报告 ID（常用于单次对比的凭证对齐）
+     * @param {Object} [progressManager] - 进度生命周期监听器
+     * @returns {Promise<Object>} 包含报告状态与相似度分析的结构化数据
      */
     async execute(config, progressManager = null) {
         const { url, designSource, options = {}, taskId = null, index = 0, id = null } = config
-        // 关键修复：优先使用传入的 ID（单次对比由控制器生成），防止前后端 ID 不匹配导致进度条卡死
+
+        // ID 调度策略：优先使用预分配 ID（控制器生成），否则根据所属任务类型降级生成
         const reportId = id || (taskId ? `batch-${taskId}-${Date.now()}-${index}` : Date.now().toString())
         const aiModel = config.aiModel || 'siliconflow'
 
-        console.log(`\n[原子执行器] 任务启动: ${reportId} (${url})`)
+        console.log(`\n[原子任务] 链条启动 -> ${reportId} 目标: ${url}`)
 
         try {
-            // 1. 初始化或获取报告记录
+            // 🚀 步骤 1: 环境占位与就绪
+            // 如果已预创（如 Control 层），则直接更新为“处理中”，否则新建一条影子记录用于前端 UI 联动
             if (!this.reportRepo.exists(reportId)) {
                 this.reportRepo.create({
                     id: reportId,
@@ -46,7 +57,6 @@ class CompareTaskService {
                     stepText: '🔍 正在初始化捕获引擎...'
                 })
             } else {
-                // 如果已由外部预创建（如 CompareController），则执行状态对齐
                 this.reportRepo.update(reportId, {
                     status: 'processing',
                     progress: 5,
@@ -54,6 +64,9 @@ class CompareTaskService {
                 })
             }
 
+            /**
+             * 进度外溢：同步更新数据库状态并触发回调监听
+             */
             const updateProgress = (progress, stepText, currentPhase) => {
                 this.reportRepo.update(reportId, { progress, stepText })
                 if (progressManager && progressManager.onProgress) {
@@ -67,7 +80,8 @@ class CompareTaskService {
                 }
             }
 
-            // 2. 探测设计稿宽度并对齐截图视口
+            // 🚀 步骤 2: 视口宽度探测
+            // 设计逻辑：自动探测设计稿宽度，并以此宽度作为截图视口，确保对齐后的比对精度保持 1:1
             let viewportWidth = 375
             const designPath = resolveDesignPath(designSource)
             if (fs.existsSync(designPath)) {
@@ -75,33 +89,33 @@ class CompareTaskService {
                     const metadata = await sharp(designPath).metadata()
                     if (metadata.width) viewportWidth = metadata.width
                 } catch (e) {
-                    console.warn('[原子执行器] 无法探测设计稿宽度，使用默认值:', e.message)
+                    console.warn('[原子任务] 设计稿元数据读取失败，将回退至 375px:', e.message)
                 }
             }
 
-            // 3. 页面截图 (统一通过 CaptureService)
-            updateProgress(10, `📸 正在以 ${viewportWidth}px 宽度捕获页面...`, 'screenshot')
+            // 🚀 步骤 3: 实时页面捕获 (Headless Chrome)
+            updateProgress(10, `📸 正在以 ${viewportWidth}px 宽度捕获全量截图...`, 'screenshot')
             const actualScreenshot = await this.captureService.capture(url, {
                 width: viewportWidth,
-                deviceScaleFactor: 1, // 关键：强制 1:1 像素捕获以匹配设计稿
+                deviceScaleFactor: 1, // 禁用视网膜缩放，确保物理像素精准对齐
                 fullPage: true,
                 ...options.viewport
             })
 
-            // 4. 执行图像对比
-            updateProgress(40, '⚖️ 执行像素级高保真差异分析...', 'compare')
+            // 🚀 步骤 4: 数学像素差异计算
+            updateProgress(40, '⚖️ 执行高精度像素级比对分析...', 'compare')
             const compareResult = await this.compareService.compare(
                 designPath,
                 actualScreenshot.path,
                 {
                     threshold: options.tolerance ? options.tolerance / 100 : 0.1,
                     engine: options.engine || 'pixelmatch',
-                    enableClustering: true
+                    enableClustering: true // 默认开启差异聚类用于报告展现红框
                 }
             )
 
-            // 5. AI 分析
-            updateProgress(70, '🧠 AI 正在诊断视觉差异原因...', 'ai')
+            // 🚀 步骤 5: AI 视觉神经诊断
+            updateProgress(70, '🧠 AI 专家正在综合评估视觉偏差原因...', 'ai')
             const fixes = await this.aiService.analyze(
                 {
                     design: designPath,
@@ -112,11 +126,11 @@ class CompareTaskService {
                 aiModel
             )
 
-            // 6. 最终落库
+            // 🚀 步骤 6: 结果收口与持久化
             const finalData = {
                 status: 'completed',
                 progress: 100,
-                stepText: '✅ 对比分析已完成',
+                stepText: '✅ 视觉对比与 AI 诊断已全部就绪',
                 similarity: compareResult.similarity,
                 diffPixels: compareResult.diffPixels,
                 totalPixels: compareResult.totalPixels,
@@ -130,19 +144,21 @@ class CompareTaskService {
                 fixes
             }
 
+            // 同步写入数据库
             this.reportRepo.update(reportId, finalData)
-            updateProgress(100, '✅ 已生成报告', 'finish')
+            updateProgress(100, '✅ 报告生成完毕', 'finish')
 
             return {
                 reportId,
-                url, // 明确返回处理的 URL，供批量任务记录使用
+                url,
                 ...finalData,
                 success: true
             }
 
         } catch (error) {
-            console.error(`\n[原子执行器] 任务失败 [${url}]:`, error)
+            console.error(`\n[原子任务] 链路执行中断 [${url}]:`, error)
 
+            // 悲观逻辑处理：记录失败原因，确保 UI 能够正确显示异常信息
             const errorData = {
                 status: 'failed',
                 error: error.message,

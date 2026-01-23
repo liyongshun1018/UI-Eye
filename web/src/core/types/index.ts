@@ -69,6 +69,8 @@ export interface CompareReport {
     diffRegions?: DiffRegion[]
     fixes: CSSFix[]
     status: 'pending' | 'processing' | 'completed' | 'failed'
+    progress?: number
+    stepText?: string
     error?: string
 }
 
