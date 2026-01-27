@@ -57,13 +57,17 @@ export class RunCompareUseCase {
             });
             onProgress?.(10, '🚀 正在初始化比对环境...');
 
-            // 步骤 2：分析设计稿规格 (20%)
-            let viewportWidth = 1920;
+            // 步骤 2：确定视口宽度 (20%)
+            // 优先级：用户配置 > 设计稿宽度 > 默认值
+            let viewportWidth = config.viewportWidth || 1920;
             const designPath = resolveDesignPath(config.designSource);
             if (designPath && fs.existsSync(designPath)) {
                 onProgress?.(20, '🎨 正在分析设计稿规格...');
-                const metadata = await sharp(designPath).metadata();
-                if (metadata.width) viewportWidth = metadata.width;
+                // 仅在用户未明确指定视口宽度时，才从设计稿读取
+                if (!config.viewportWidth) {
+                    const metadata = await sharp(designPath).metadata();
+                    if (metadata.width) viewportWidth = metadata.width;
+                }
             }
 
             // 步骤 3：获取实测图 (30% - 50%)

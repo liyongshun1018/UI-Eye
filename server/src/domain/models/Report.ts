@@ -22,6 +22,7 @@ export interface DiffRegion {
 export interface ReportConfig {
     url: string;              // 待审计的网页地址
     designSource: string;     // 设计稿关联 ID 或 物理路径
+    viewportWidth?: number;   // 视口宽度（优先级高于 options.viewport.width）
     options?: {
         tolerance?: number;   // 像素偏差容差
         viewport?: {
