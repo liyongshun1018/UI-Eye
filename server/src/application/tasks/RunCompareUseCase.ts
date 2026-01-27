@@ -70,6 +70,8 @@ export class RunCompareUseCase {
                 }
             }
 
+            console.log(`[RunCompareUseCase] 任务 ${reportId}, 配置的视口宽度: ${config.viewportWidth}, 最终使用: ${viewportWidth}`);
+
             // 步骤 3：获取实测图 (30% - 50%)
             let actualPath = '';
             let actualUrl = '';

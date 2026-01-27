@@ -80,6 +80,8 @@ export class ManageBatchTasksUseCase {
                     viewportWidth: task.compareConfig?.viewport?.width || 1920
                 };
 
+                console.log(`[批量任务] URL: ${url}, 视口宽度: ${config.viewportWidth}, 原始配置:`, task.compareConfig);
+
                 try {
                     // 执行原子比对用例
                     const result = await this.runCompareUseCase.execute(

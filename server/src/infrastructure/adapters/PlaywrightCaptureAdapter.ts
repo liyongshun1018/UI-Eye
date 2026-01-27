@@ -29,12 +29,25 @@ export class PlaywrightCaptureAdapter {
         });
 
         try {
+            const viewportWidth = options.width || 1920;
+            // 根据宽度判断是否为移动端，动态调整高度和 UA
+            const isMobile = viewportWidth < 768;
+            const viewportHeight = isMobile ? 667 : 1080;
+
+            console.log(`[Playwright] 视口配置: ${viewportWidth}x${viewportHeight}${isMobile ? ' (移动端模式)' : ''}`);
+
             const context = await browser.newContext({
                 viewport: {
-                    width: options.width || 1920,
-                    height: 1080
+                    width: viewportWidth,
+                    height: viewportHeight
                 },
-                deviceScaleFactor: 1
+                deviceScaleFactor: 1,
+                // 移动端模式下设置移动端 User-Agent
+                ...(isMobile && {
+                    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+                    isMobile: true,
+                    hasTouch: true
+                })
             });
 
             const page = await context.newPage();
