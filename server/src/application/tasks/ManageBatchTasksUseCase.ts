@@ -76,7 +76,8 @@ export class ManageBatchTasksUseCase {
                 const config = {
                     url,
                     designSource: task.compareConfig?.designSource || (task as any).designSource,
-                    aiModel: task.aiModel
+                    aiModel: task.aiModel,
+                    viewportWidth: task.compareConfig?.viewport?.width || 1920
                 };
 
                 try {

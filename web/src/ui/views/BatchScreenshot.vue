@@ -286,7 +286,7 @@ const handleSubmit = async () => {
       script_id: form.value.scriptId,
       designMode: designUpload.value.mode,
       designSource: designUpload.value.designSource || null,
-      compareConfig: (designUpload.value.designSource) ? compareConfig.value : null,
+      compareConfig: compareConfig.value,
       options: form.value.options
     }
     
