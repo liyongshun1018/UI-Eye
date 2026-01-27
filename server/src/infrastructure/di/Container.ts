@@ -65,6 +65,7 @@ export class Container {
     static getManageBatchTasksUseCase() {
         return this.get('ManageBatchTasksUseCase', () => new ManageBatchTasksUseCase(
             this.getBatchTaskRepository(),
+            this.getScriptRepository(),
             this.getRunCompareUseCase()
         ));
     }
