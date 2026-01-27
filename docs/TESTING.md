@@ -10,94 +10,63 @@
 ### 后端服务
 - **地址**：http://localhost:3000
 - **状态**：✅ 运行中
-- **技术栈**：Express + Node.js
+- **技术栈**：Node.js + TypeScript (DDD 架构)
 
 ## 📝 测试流程
 
 ### 1. 访问首页
 打开浏览器访问：http://localhost:5173
 
-### 2. 开始对比
-1. 点击"开始对比"按钮
-2. 选择对比模式：
-   - **效果图上传**：拖拽或选择本地图片
-   - **蓝湖地址**：输入蓝湖链接（目前返回模拟数据）
+### 2. 单页即时对比
+1. 点击"开始对比"按钮。
+2. 输入待测 URL。
+3. 上传本地设计稿或输入蓝湖地址。
+4. 点击“开始对比”，等待系统执行：`截图 -> ODiff 对比 -> AI 诊断`。
 
-### 3. 配置参数
-- **H5 页面地址**：输入任意 URL（例如：https://example.com）
-- **AI 模型**：选择千问 2.5 / GPT-4 Vision / Claude 3
-- **视口尺寸**：选择预设或自定义
+### 3. 批量走查任务
+1. 进入“批量任务”页面。
+2. 创建一个包含多个 URL 的任务。
+3. 启动任务并观察实时进度推送。
 
-### 4. 查看报告
-提交后会自动跳转到报告页面，显示：
-- 还原度评分（模拟数据：92.5%）
-- 设计稿 / 实际页面 / 差异图对比
-- CSS 修复建议列表
+### 4. 插件实时诊断
+1. 确保插件已安装。
+2. 在任意页面右键或通过插件面板启动诊断。
 
 ## 🔧 当前功能状态
 
-### ✅ 已实现
-- 前端完整界面（首页、对比页、报告页）
-- 后端 API 服务器
-- 文件上传功能
-- 对比任务管理
-- 报告生成（模拟数据）
+### ✅ 已全面实现
+- **高性能对比引擎**：集成 ODiff (Rust) 核心，支持千万像素级快速扫描。
+- **真实截图采集**：基于 Puppeteer 的全页滚动截图及资源加载等待。
+- **AI 智能诊断**：对接 SiliconFlow (Qwen/Yi) 等多模态模型，生成真实修复建议。
+- **实时进度推送**：基于 WebSocket 的任务流转状态通知。
+- **批量并发控制**：支持大规模多任务队列执行。
+- **自动化预处理**：支持自定义脚本在截图前执行（登录、弹窗处理等）。
 
-### 🚧 使用模拟数据
-以下功能目前返回模拟数据：
-- 蓝湖 API 集成
-- 页面截图
-- 图像对比
-- AI 分析
+### 📋 后续计划
+- [ ] CI/CD 集成流水线插件。
+- [ ] 导出 PDF 格式的完整审计报告。
+- [ ] 自动化测试用例录制。
 
-### 📋 待实现
-- Puppeteer 截图采集
-- Pixelmatch 图像对比
-- 真实 AI 模型集成
-- 真实蓝湖 API 调用
-
-## 🧪 API 测试
+## 🧪 核心接口验证
 
 ### 健康检查
 ```bash
 curl http://localhost:3000/api/health
 ```
 
-### 上传设计稿
+### 发起批量任务
 ```bash
-curl -X POST http://localhost:3000/api/upload-design \
-  -F "file=@/path/to/design.png"
-```
-
-### 开始对比
-```bash
-curl -X POST http://localhost:3000/api/compare \
+curl -X POST http://localhost:3000/api/batch/tasks \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://example.com",
-    "mode": "upload",
-    "designSource": "/uploads/xxx.png",
-    "aiModel": "qwen",
-    "viewport": {"width": 375, "height": 667}
+    "name": "测试任务",
+    "urls": ["https://m.baidu.com"],
+    "designSource": "https://example.com/design.png"
   }'
-```
-
-### 获取报告
-```bash
-curl http://localhost:3000/api/report/{reportId}
 ```
 
 ## 💡 注意事项
 
-1. **模拟数据**：当前版本使用模拟数据，报告结果为预设值
-2. **图片占位符**：实际页面和差异图使用 placeholder 图片
-3. **处理延迟**：对比任务有 3 秒模拟延迟
-4. **文件上传**：支持 PNG/JPG 格式，最大 10MB
-
-## 🎯 下一步开发
-
-1. 集成 Puppeteer 实现真实页面截图
-2. 集成 Pixelmatch 实现像素级对比
-3. 集成 AI 模型（千问 2.5 / GPT-4 Vision）
-4. 实现真实的蓝湖 API 调用
-5. 优化错误处理和用户体验
+1. **API 配置**：确保 `server/.env` 中配置了有效的 AI 供应商 API Key。
+2. **端口占用**：系统默认占用 3000 (Backend) 和 5173 (Frontend) 端口。
+3. **资源依赖**：截图功能依赖本地 Chrome 组件（Puppeteer 自动安装）。

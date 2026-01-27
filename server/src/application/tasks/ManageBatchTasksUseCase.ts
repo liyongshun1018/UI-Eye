@@ -4,24 +4,35 @@ import wsServer from '../../infrastructure/ws/WSServer.js';
 import pLimit from 'p-limit';
 import { BatchTask } from '../../domain/models/BatchTask.js';
 
+/**
+ * ManageBatchTasksUseCase - 批量任务管理用例
+ * 职责：管控大规模走查任务的全生命周期，包括创建、排队执行、实时进度推送及结果聚合统计
+ */
 export class ManageBatchTasksUseCase {
-    private limit = pLimit(3);
+    private limit = pLimit(3); // 限制并行任务数为 3，防止浏览器进程过多导致 OOM
 
     constructor(
         private batchRepo: IBatchTaskRepository,
         private runCompareUseCase: RunCompareUseCase
     ) { }
 
+    /**
+     * 创建批量任务记录
+     */
     async createTask(data: Partial<BatchTask>): Promise<number> {
         return this.batchRepo.create(data);
     }
 
+    /**
+     * 启动批量任务扫描序列
+     * 流程：状态初始化 -> 子任务队列排队 -> 并行执行原子比对 -> 实时聚合统计 -> 多端通知
+     */
     async startBatch(taskId: number): Promise<void> {
         console.log(`[批量任务] startBatch 被调用: taskId=${taskId}`);
         const task = this.batchRepo.findById(taskId);
         if (!task) throw new Error('任务不存在');
 
-        // 记录开始时间，解决耗时统计不正确问题
+        // 1. 状态初始化：记录开始时间，解决耗时统计不正确问题
         const startTime = Math.floor(Date.now() / 1000);
         this.batchRepo.update(taskId, {
             status: 'running',
@@ -36,10 +47,10 @@ export class ManageBatchTasksUseCase {
             stepText: '🔄 正在准备子任务队列...'
         });
 
-        // 执行队列
+        // 2. 构造子任务执行队列
         const jobs = task.urls.map((url, index) => {
             return this.limit(async () => {
-                // [关键修复] 子项开始即推送初始进度，参考重构前的逻辑
+                // [关键修复] 子项开始即推送初始进度，确保前端 UI 即时响应
                 const initialProgress = Math.round((index / task.total) * 100);
                 wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
                     current: index,
@@ -57,12 +68,13 @@ export class ManageBatchTasksUseCase {
                 };
 
                 try {
+                    // 执行原子比对用例
                     const result = await this.runCompareUseCase.execute(
                         `batch-${taskId}-${index}`,
                         config,
-                        // 进度回调：将单个任务的内部进度广播给前端
+                        // 进度回调：将单个子任务的内部流水线进度广播给前端
                         (subProgress: number, subStepText: string) => {
-                            // 计算整体进度：基础进度 + 当前子任务的内部进度贡献
+                            // 计算全局宏观进度：已完成比例 + 当前子任务的微观贡献
                             const baseProgress = Math.round((index / task.total) * 100);
                             const subProgressContribution = Math.round((subProgress / 100) * (100 / task.total));
                             const totalProgress = Math.min(baseProgress + subProgressContribution, 99);
@@ -78,7 +90,7 @@ export class ManageBatchTasksUseCase {
                         }
                     );
 
-                    // 1. 持久化子项结果：核心包含指标回写
+                    // A. 持久化子项结果：核心包含还原度指标回写
                     this.batchRepo.updateItem(taskId, url, {
                         status: 'completed',
                         reportId: result.id,
@@ -87,7 +99,7 @@ export class ManageBatchTasksUseCase {
                         diffCount: result.diffRegions?.length || 0
                     });
 
-                    // 2. 聚合统计
+                    // B. 聚合全量统计：计算平均还原度、总差异数等
                     const currentTask = this.batchRepo.findById(taskId)!;
                     const items = this.batchRepo.findItemsByTaskId(taskId);
                     const completedItems = items.filter(i => i.status === 'completed' || (i.similarity !== undefined && i.similarity !== null));
@@ -109,7 +121,7 @@ export class ManageBatchTasksUseCase {
                         totalDiffCount
                     } as any);
 
-                    // 3. 多端推送
+                    // C. 实时推送阶段性汇总结果
                     const currentDuration = Math.floor(Date.now() / 1000) - (currentTask.startedAt || startTime);
                     const currentProgress = Math.round((newSuccess / task.total) * 100);
 
@@ -136,16 +148,16 @@ export class ManageBatchTasksUseCase {
                 } catch (error: any) {
                     console.error(`[批量原子任务失败] ${url}:`, error.message);
 
-                    // 持久化失败状态
+                    // 异常持久化：标记该子项失败
                     this.batchRepo.updateItem(taskId, url, {
                         status: 'failed',
                         error: error.message
                     });
 
                     const currentTask = this.batchRepo.findById(taskId)!;
-                    this.batchRepo.update(taskId, { failed: currentTask.failed + 1 });
+                    this.batchRepo.update(taskId, { failed: (currentTask.failed || 0) + 1 });
 
-                    // 推送失败反馈
+                    // 推送失败反馈，通知前端展示错误态
                     wsServer.broadcastTaskUpdate(taskId, 'task:progress', {
                         current: index + 1,
                         total: task.total,
@@ -156,6 +168,7 @@ export class ManageBatchTasksUseCase {
             });
         });
 
+        // 3. 所有任务执行完毕后的收尾工作
         Promise.all(jobs).then(() => {
             const finalTask = this.batchRepo.findById(taskId);
             if (!finalTask) return;
@@ -163,7 +176,7 @@ export class ManageBatchTasksUseCase {
             const items = this.batchRepo.findItemsByTaskId(taskId);
             const duration = Math.floor(Date.now() / 1000) - (finalTask.startedAt || startTime);
 
-            // 更新最终状态
+            // 更新最终生命周期状态
             this.batchRepo.update(taskId, {
                 status: 'completed',
                 completedAt: Math.floor(Date.now() / 1000),
@@ -171,7 +184,7 @@ export class ManageBatchTasksUseCase {
                 duration
             } as any);
 
-            // 广播完整的完成数据，防止前端崩溃
+            // 广播完整的结算数据，确保前端统计组件能够渲染最终态
             wsServer.broadcastTaskUpdate(taskId, 'task:completed', {
                 taskId,
                 duration,
@@ -187,21 +200,24 @@ export class ManageBatchTasksUseCase {
     }
 
     /**
-     * 删除批量任务及其关联的所有子报告
+     * 删除批量任务及其关联的所有子记录
      */
     deleteTask(id: number) {
-        // TODO: Add logic to delete associated sub-reports if necessary
+        // 注：如有必要，此处可扩展删除子报告产生的物理图片文件
         return this.batchRepo.deleteById(id);
     }
 
+    /**
+     * 获取单一任务详情 (含子项明细与动态耗时计算)
+     */
     getTask(id: number) {
         const task = this.batchRepo.findById(id);
         if (!task) return null;
 
-        // 核心：在获取详情时，同步拉取并挂载子项明细，确前前端刷新后数据不丢失
+        // 在获取详情时，实时同步拉取并挂载子项明细，确保前端刷新后队列状态不丢失
         const items = this.batchRepo.findItemsByTaskId(id);
 
-        // 动态计算耗时：如果任务还在运行，实时计算当前已执行秒数
+        // 动态计算耗时：如果任务仍在运行中，基于开始时间实时计算秒数展现给用户
         let currentDuration = task.duration;
         if (task.status === 'running' && task.startedAt) {
             const now = Math.floor(Date.now() / 1000);
@@ -215,16 +231,25 @@ export class ManageBatchTasksUseCase {
         };
     }
 
+    /**
+     * 获取历史任务列表 (支持分页与状态汇总)
+     */
     getTaskList(limit: number, offset: number, status?: string) {
         const tasks = this.batchRepo.findAll(limit, offset, status);
         const total = this.batchRepo.getCount(status);
         return { tasks, total };
     }
 
+    /**
+     * 获取明细分项结果
+     */
     getTaskResults(taskId: number) {
         return this.batchRepo.findItemsByTaskId(taskId);
     }
 
+    /**
+     * 获取大盘任务量化统计
+     */
     getStats() {
         return {
             total: this.batchRepo.getCount(),
@@ -235,3 +260,4 @@ export class ManageBatchTasksUseCase {
         };
     }
 }
+
