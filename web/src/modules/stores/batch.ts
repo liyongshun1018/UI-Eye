@@ -177,12 +177,28 @@ export const useBatchStore = defineStore('batch', () => {
     }
 
     const updateTaskProgress = (id: number, progress: TaskProgress): void => {
+        console.log('📊 [updateTaskProgress] id:', id, 'progress:', progress)
         const task = tasks.value.find(t => t.id === id)
         if (task) {
-            Object.assign(task, progress)
+            if (progress.currentUrl !== undefined) task.currentUrl = progress.currentUrl
+            if (progress.currentPhase !== undefined) task.currentPhase = progress.currentPhase
+            if (progress.total !== undefined) task.total = progress.total
+            if (progress.progress !== undefined) task.progress = progress.progress
+            if (progress.stepText !== undefined) task.stepText = progress.stepText
+            if (progress.success !== undefined) task.success = progress.success
+            if (progress.avgSimilarity !== undefined) {
+                task.avgSimilarity = progress.avgSimilarity
+                console.log('📊 [updateTaskProgress] 更新 task.avgSimilarity:', task.avgSimilarity)
+            }
+            if (progress.totalDiffCount !== undefined) {
+                task.totalDiffCount = progress.totalDiffCount
+                console.log('📊 [updateTaskProgress] 更新 task.totalDiffCount:', task.totalDiffCount)
+            }
+            if (progress.duration !== undefined) task.duration = progress.duration
         }
         if (currentTask.value && currentTask.value.id === id) {
             Object.assign(currentTask.value, progress)
+            console.log('📊 [updateTaskProgress] 更新 currentTask:', currentTask.value)
         }
     }
 
@@ -216,6 +232,13 @@ export const useBatchStore = defineStore('batch', () => {
         switch (message.type) {
             case 'task:started':
                 updateTaskStatus(taskId, 'running')
+                // 关键修复：同步更新 phase 和 stepText，激活进度条计算
+                if (message.data) {
+                    updateTaskProgress(taskId, {
+                        currentPhase: message.data.phase || message.data.currentPhase,
+                        stepText: message.data.stepText
+                    })
+                }
                 break
             case 'task:progress':
                 const progressData: TaskProgress = {
@@ -223,7 +246,8 @@ export const useBatchStore = defineStore('batch', () => {
                     currentPhase: message.data.phase || message.data.currentPhase,
                     total: message.data.total,
                     progress: message.data.progress,
-                    stepText: message.data.stepText
+                    stepText: message.data.stepText,
+                    duration: message.data.duration
                 }
 
                 // 处理增量结果
@@ -260,7 +284,9 @@ export const useBatchStore = defineStore('batch', () => {
                     }
                 }
 
-                if (['compare', 'ai', 'finish'].includes(message.data.phase || message.data.currentPhase)) {
+
+                // 处理统计数据（移除 phase 限制）
+                if (true || ['compare', 'ai', 'finish'].includes(message.data.phase || message.data.currentPhase)) {
                     const target = (isCurrent ? currentTask.value : task) as any
                     if (target) {
                         // 1. 统一计算成功数
@@ -270,16 +296,23 @@ export const useBatchStore = defineStore('batch', () => {
                         }
 
                         const completedItems = Array.isArray(res)
-                            ? res.filter((r: any) => r.status === 'completed' || r.success)
+                            ? res.filter((r: any) => r && (r.status === 'completed' || r.success))
                             : []
 
                         progressData.success = completedItems.length
 
-                        // 2. 实时累加累计差异点与平均相似度
-                        if (completedItems.length > 0) {
-                            progressData.totalDiffCount = completedItems.reduce((sum: number, r: any) => sum + (Number(r.diffCount) || 0), 0)
+                        // 2. 状态同步：优先使用后端推送的值，若为 0 且本地有数据则进行补偿计算
+                        if (message.data.avgSimilarity !== undefined && message.data.avgSimilarity > 0) {
+                            progressData.avgSimilarity = message.data.avgSimilarity
+                        } else if (completedItems.length > 0) {
                             const totalSim = completedItems.reduce((sum: number, r: any) => sum + (Number(r.similarity) || 0), 0)
                             progressData.avgSimilarity = totalSim / completedItems.length
+                        }
+
+                        if (message.data.totalDiffCount !== undefined) {
+                            progressData.totalDiffCount = message.data.totalDiffCount
+                        } else if (completedItems.length > 0) {
+                            progressData.totalDiffCount = completedItems.reduce((sum: number, r: any) => sum + (Number(r.diffCount) || 0), 0)
                         }
                     }
                 } else {
@@ -289,14 +322,15 @@ export const useBatchStore = defineStore('batch', () => {
                 updateTaskProgress(taskId, progressData)
                 break
             case 'task:completed':
+                const data = message.data || {}
                 const finalData = {
                     status: 'completed',
-                    success: message.data.compare ? message.data.compare.successCount : message.data.screenshot.success,
-                    failed: message.data.compare ? message.data.compare.failedCount : message.data.screenshot.failed,
-                    duration: Number(message.data.duration) || 0,
-                    avgSimilarity: Number(message.data.compare?.avgSimilarity ?? message.data.compare?.avg_similarity) || 0,
-                    totalDiffCount: Number(message.data.compare?.totalDiffCount ?? message.data.compare?.total_diff_count) || 0,
-                    results: message.data.compare ? message.data.compare.results : message.data.screenshot.results
+                    success: data.screenshot?.success || data.compare?.successCount || 0,
+                    failed: data.screenshot?.failed || data.compare?.failedCount || 0,
+                    duration: Number(data.duration) || 0,
+                    avgSimilarity: Number(data.avgSimilarity ?? data.compare?.avgSimilarity ?? 0),
+                    totalDiffCount: Number(data.totalDiffCount ?? data.compare?.totalDiffCount ?? 0),
+                    results: data.screenshot?.results ?? data.compare?.results ?? []
                 }
                 updateTaskProgress(taskId, finalData)
                 updateTaskStatus(taskId, 'completed')

@@ -1,3 +1,7 @@
+// 配置：服务地址（可根据环境调整）
+const API_BASE_URL = 'http://localhost:3000';
+const WEB_BASE_URL = 'http://localhost:5173';
+
 /**
  * UI-Eye Popup Logic (组件化查验与平台深度联动版)
  * 核心任务：管理插件 UI 交互状态，执行 AI 诊断请求，并支持一键镜像至管端。
@@ -148,24 +152,37 @@ gotoPlatformLink.addEventListener('click', async (e) => {
         // 这样可以彻底避免因高度不同导致的纵向拉伸失真
         console.log('[UI-Eye] 正在向平台同步原始比例数据...');
 
-        const response = await fetch("http://localhost:3000/api/extension/export", {
+        const response = await fetch(`${API_BASE_URL}/api/extension/export`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                actualImage: currentData.actualImage,
-                designImage: currentData.designImage,
-                diagnosis: currentData.diagnosisResult,
-                styles: currentData.styles,
-                elementInfo: currentData.elementInfo
+                // 必需字段：URL（从元素信息或当前页面获取）
+                url: currentData.elementInfo?.url || window.location.href,
+                // 字段重命名：designImage → designSource
+                designSource: currentData.designImage,
+                // 字段重命名：actualImage → actualScreenshot
+                actualScreenshot: currentData.actualImage,
+                // 必需字段：diffImage（插件端不生成，传空字符串）
+                diffImage: "",
+                // 必需字段：similarity（从诊断结果获取，默认为 0）
+                similarity: currentData.similarity || 0,
+                // 必需字段：diffRegions（插件端不生成，传空数组）
+                diffRegions: [],
+                // 必需字段：fixes（插件端不生成，传空数组）
+                fixes: [],
+                // 可选字段：标识使用的 AI 模型
+                aiModel: "gemini-2.0-flash-exp"
             })
         });
 
         const result = await response.json();
-        if (result.success && result.data.reportId) {
+        if (result.success && result.data && result.data.reportId) {
             // 关键：打开 Web 管理平台的新标签页，实现闭环。
-            chrome.tabs.create({ url: `http://localhost:5173/report/${result.data.reportId}` });
+            chrome.tabs.create({ url: `${WEB_BASE_URL}/report/${result.data.reportId}` });
         } else {
-            alert("同步失败: " + result.message);
+            // 显示后端返回的实际错误消息
+            const errorMsg = result.message || '同步失败，未知错误';
+            alert("同步失败: " + errorMsg);
         }
     } catch (err) {
         console.error("Export Error:", err);
@@ -312,7 +329,7 @@ diagnoseBtn.addEventListener('click', async () => {
     resultArea.style.display = 'none';
 
     try {
-        const API_URL = "http://localhost:3000/api/extension/diagnose";
+        const API_URL = `${API_BASE_URL}/api/extension/diagnose`;
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

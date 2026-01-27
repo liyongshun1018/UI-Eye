@@ -4,10 +4,10 @@
       <thead>
         <tr>
           <th class="col-priority">优先级</th>
+          <th class="col-ref">关联</th>
           <th class="col-type">类型</th>
-          <th class="col-selector">选择器</th>
-          <th class="col-current">当前样式</th>
-          <th class="col-suggested">建议样式</th>
+          <th class="col-advice">业务建议 / CSS 选择器</th>
+          <th class="col-current">具体改动</th>
           <th class="col-action">操作</th>
         </tr>
       </thead>
@@ -18,17 +18,19 @@
               {{ getPriorityLabel(fix.priority) }}
             </span>
           </td>
+          <td class="col-ref">
+             <span v-if="fix.regionId" class="ref-id">#{{ fix.regionId }}</span>
+             <span v-else class="ref-none">-</span>
+          </td>
           <td class="col-type">
             <span class="type-badge">{{ getTypeLabel(fix.type) }}</span>
           </td>
-          <td class="col-selector">
-            <code>{{ fix.selector }}</code>
+          <td class="col-advice">
+            <div v-if="fix.advice" class="cell-advice">{{ fix.advice }}</div>
+            <code v-if="fix.selector" class="cell-selector">{{ fix.selector }}</code>
           </td>
           <td class="col-current">
-            <code>{{ fix.currentCSS }}</code>
-          </td>
-          <td class="col-suggested">
-            <div class="code-diff">
+            <div v-if="fix.suggestedCSS" class="code-diff">
               <code 
                 v-for="(prop, propIdx) in getDiffProperties(fix.currentCSS, fix.suggestedCSS)" 
                 :key="propIdx"
@@ -36,11 +38,11 @@
                   'diff-added': prop.type === 'added', 
                   'diff-changed': prop.type === 'changed' 
                 }"
-                :title="prop.type === 'changed' ? `从 ${prop.oldValue} 修改为 ${prop.newValue}` : ''"
               >
                 {{ prop.name }}: {{ prop.newValue }};
               </code>
             </div>
+            <span v-else class="text-muted">（业务建议无样式变动）</span>
           </td>
           <td class="col-action">
             <div class="action-buttons">
@@ -52,6 +54,7 @@
                  👁️
                </button>
                <button 
+                 v-if="fix.suggestedCSS"
                  class="btn-icon btn-secondary" 
                  @click="$emit('copy', fix.suggestedCSS)"
                  title="复制代码"
@@ -114,7 +117,10 @@ const getTypeLabel = (type) => {
     color: '颜色',
     typography: '字体',
     spacing: '间距',
-    size: '尺寸'
+    size: '尺寸',
+    feature: '功能',
+    content: '内容',
+    other: '其他'
   }
   return labels[type] || type
 }
@@ -204,19 +210,22 @@ const getDiffProperties = (current, suggested) => {
 }
 
 .col-priority {
-  width: 80px;
+  width: 70px;
+}
+
+.col-ref {
+  width: 60px;
 }
 
 .col-type {
-  width: 80px;
+  width: 70px;
 }
 
-.col-selector {
-  width: 150px;
+.col-advice {
+  min-width: 250px;
 }
 
-.col-current,
-.col-suggested {
+.col-current {
   min-width: 200px;
 }
 
@@ -331,14 +340,45 @@ code.suggested {
   font-weight: 600;
 }
 
+.ref-id {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ref-none {
+  color: var(--text-tertiary);
+}
+
+.cell-advice {
+  font-size: 13px;
+  color: #0369A1;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.cell-selector {
+  display: block;
+}
+
+.text-muted {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
 .code-diff {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .code-diff code {
-  margin-bottom: 2px;
+  margin-bottom: 0; /* Removed original margin-bottom: 2px; */
 }
 
 .diff-added {

@@ -43,3 +43,7 @@ server/data/reports/*
 *.sqlite
 *.db-wal
 *.db-shm
+
+# Screenshots
+server/data/screenshots/*
+!server/data/screenshots/.gitkeep

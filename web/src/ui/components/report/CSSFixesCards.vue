@@ -9,10 +9,13 @@
         <span class="fix-priority" :class="`priority-${fix.priority}`">
           {{ getPriorityLabel(fix.priority) }}
         </span>
+        <span v-if="fix.regionId" class="region-badge">Region #{{ fix.regionId }}</span>
         <span class="fix-type">{{ getTypeLabel(fix.type) }}</span>
       </div>
       <h3 class="fix-description">{{ fix.description }}</h3>
-      <div class="fix-code">
+      
+      <!-- CSS 修复区块：仅在有 CSS 内容时显示 -->
+      <div v-if="fix.suggestedCSS || fix.currentCSS" class="fix-code">
         <div class="code-block">
           <div class="code-label">当前样式</div>
           <code>{{ fix.selector }} { {{ fix.currentCSS }} }</code>
@@ -36,15 +39,22 @@
             </div>
             <code>}</code>
           </div>
-          <!-- Removed old copy button -->
         </div>
       </div>
+
+      <!-- 文字版业务建议区块 -->
+      <div v-if="fix.advice" class="fix-advice-box">
+        <div class="advice-label">💡 业务改进建议</div>
+        <p class="advice-text">{{ fix.advice }}</p>
+      </div>
+
       <p v-if="fix.impact" class="fix-impact">{{ fix.impact }}</p>
+      
       <div class="card-actions">
         <button class="btn btn-primary btn-sm" @click="$emit('preview', fix)">
           <span class="icon">👁️</span> 查看原页面
         </button>
-        <button class="btn btn-secondary btn-sm" @click="$emit('copy', fix.suggestedCSS)">
+        <button v-if="fix.suggestedCSS" class="btn btn-secondary btn-sm" @click="$emit('copy', fix.suggestedCSS)">
           <span class="icon">📋</span> 复制代码
         </button>
       </div>
@@ -100,7 +110,10 @@ const getTypeLabel = (type) => {
     color: '颜色',
     typography: '字体',
     spacing: '间距',
-    size: '尺寸'
+    size: '尺寸',
+    feature: '功能',
+    content: '内容',
+    other: '其他'
   }
   return labels[type] || type
 }
@@ -291,12 +304,44 @@ code {
   transform: translateY(-1px);
 }
 
+.region-badge {
+  padding: 4px 10px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.fix-advice-box {
+  background: #F0F9FF;
+  border: 1px dashed #7DD3FC;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.advice-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369A1;
+  margin-bottom: 4px;
+}
+
+.advice-text {
+  font-size: 14px;
+  color: #0C4A6E;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .fix-impact {
   font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0;
+  color: #4338CA;
+  margin: 0 0 12px 0;
   padding: 8px 12px;
-  background: rgba(99, 102, 241, 0.05);
+  background: #EEF2FF;
   border-left: 3px solid var(--accent-primary);
   border-radius: var(--radius-sm);
 }

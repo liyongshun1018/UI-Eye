@@ -89,7 +89,7 @@
             </span>
             <span class="sub">Total identified regions</span>
           </div>
-            <div class="stat-card">
+          <div class="stat-card">
             <span class="label">监控运行总耗时</span>
             <span class="value">{{ formatNumber(task.duration, 1) }}s</span>
             <span class="sub">Real-time processing</span>
@@ -295,26 +295,9 @@ const displayProgress = computed(() => {
   if (task.value.status === 'completed') return 100
   if (task.value.status === 'failed') return 0
   
-  // 权重定义：各阶段占据的总进度百分比
-  const weights = normalizedTask.value.hasDesign 
-    ? { screenshot: 45, compare: 40, ai: 10, finish: 5 }
-    : { screenshot: 90, compare: 0, ai: 0, finish: 10 }
-  
-  const phase = task.value.currentPhase || 'init'
-  const phaseProgress = task.value.progress || 0 // 阶段内部进度 (0-100)
-  
-  // 计算基础进度
-  let base = 0
-  if (phase === 'screenshot') base = 0
-  else if (phase === 'compare') base = weights.screenshot
-  else if (phase === 'ai') base = weights.screenshot + weights.compare
-  else if (phase === 'finish') base = weights.screenshot + weights.compare + weights.ai
-  
-  // 计算当前阶段对总进度的贡献
-  const currentWeight = weights[phase] || 0
-  const contribution = (phaseProgress / 100) * currentWeight
-  
-  return Math.min(Math.round(base + contribution), 99)
+  // 直接使用后端推送的 progress 值（0-100）
+  // 后端已经根据 success/total 计算了整体进度
+  return task.value.progress || 0
 })
 
 /** 过滤与搜索逻辑 */
@@ -406,9 +389,9 @@ const goBack = () => router.push('/batch-tasks')
 
 const previewImage = (res) => {
   // 优先使用 screenshot_path (已经是完整 URL)
-  // 其次使用 url_path (已经是完整 URL)
-  // 最后尝试从 filename 或 path 构建 URL
-  let imagePath = res.screenshot_path || res.url_path
+  // 其次从 images 对象中寻找 actual
+  // 再次使用 url_path
+  let imagePath = res.screenshot_path || res.screenshotPath || res.images?.actual || res.images?.screenshot || res.url_path
   
   if (!imagePath && res.filename) {
     imagePath = `/api/batch/screenshots/${res.filename}`

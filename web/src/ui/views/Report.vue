@@ -86,6 +86,7 @@ import { useReportStore } from '@modules/stores/report'
 
 // 模块化原子组件导入
 import ProcessingState from '@ui/components/report/ProcessingState.vue'
+import ReportHeader from '@ui/components/report/ReportHeader.vue'
 import ComparisonGallery from '@ui/components/report/ComparisonGallery.vue'
 import DiffRegionsSection from '@ui/components/report/DiffRegionsSection.vue'
 import CSSFixesSection from '@ui/components/report/CSSFixesSection.vue'
@@ -98,8 +99,11 @@ const reportStore = useReportStore()
 /** 
  * 数据映射：将 Store 中的响应式状态映射为本地只读计算属性
  */
+/** @type {import('vue').ComputedRef<boolean>} */
 const isLoading = computed(() => reportStore.loading)
+/** @type {import('vue').ComputedRef<string | null>} */
 const errorMessage = computed(() => reportStore.error)
+/** @type {import('vue').ComputedRef<import('@core/types').CompareReport | null>} */
 const reportData = computed(() => reportStore.currentReport)
 
 /** 
@@ -110,7 +114,7 @@ const comparisonMode = ref('side-by-side')
 
 /** 
  * 视觉锚点：当前页面关注的核心差异区域（如点击某个红框后激活）
- * @type {import('vue').Ref<Object | null>} 
+ * @type {import('vue').Ref<import('@core/types').DiffRegion | null>} 
  */
 const selectedRegion = ref(null)
 
@@ -141,6 +145,10 @@ const refreshReport = () => {
  * 1. 强制切换 UI 模式为“差异高亮 (diff)”。
  * 2. 设置选中的 Region 数据。
  * 3. 执行平滑滚动，将用户的视觉中心引导至图片对比区。
+ */
+/**
+ * 核心交互：智能定位至特定差异区
+ * @param {import('@core/types').DiffRegion} region - 目标差异区域
  */
 const locateRegion = (region) => {
   comparisonMode.value = 'diff'

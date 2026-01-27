@@ -16,7 +16,7 @@ export const compareAPI = {
     uploadDesign: (file: File, onProgress?: (percent: number) => void) => {
         const formData = new FormData()
         formData.append('file', file)
-        return upload<UploadResponse>('/upload-design', formData, onProgress)
+        return upload<UploadResponse>('/upload', formData, onProgress)
     },
 
     /**
@@ -50,7 +50,7 @@ export const compareAPI = {
      * @param {number} [params.offset]
      */
     getReports: (params?: { limit?: number; offset?: number }) => {
-        return get<ApiResponse<CompareReport[]>>('/reports', params)
+        return get<ApiResponse<CompareReport[]>>('/compare/reports', params)
     },
 
     /**

@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "server": "node src/index.js"
+        "server": "tsx src/index.ts"
     },
     "dependencies": {
         "better-sqlite3": "^12.6.0",
@@ -20,10 +20,22 @@
         "resemblejs": "^5.0.0",
         "sharp": "^0.34.5",
         "ws": "^8.19.0",
-        "zod": "^4.3.5"
+        "zod": "^4.3.6"
     },
     "devDependencies": {
-        "@types/node": "^25.0.8",
-        "playwright": "^1.57.0"
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/cors": "^2.8.19",
+        "@types/dotenv": "^6.1.1",
+        "@types/express": "^5.0.6",
+        "@types/multer": "^2.0.0",
+        "@types/node": "^25.0.10",
+        "@types/p-limit": "^2.1.0",
+        "@types/pixelmatch": "^5.2.6",
+        "@types/pngjs": "^6.0.5",
+        "@types/puppeteer": "^5.4.7",
+        "@types/sharp": "^0.31.1",
+        "@types/ws": "^8.18.1",
+        "playwright": "^1.57.0",
+        "tsx": "^4.19.2"
     }
 }
