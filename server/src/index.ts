@@ -1,5 +1,6 @@
 import http from 'http';
 import app from './app.js';
+import { execSync } from 'child_process';
 import { getDatabase } from './db/connection.js';
 import { initializeTables } from './db/schema.js';
 import wsServer from './infrastructure/ws/WSServer.js';
@@ -20,6 +21,15 @@ async function bootstrap() {
         // 2. 初始化持久层：连接 SQLite 并同步最新的表结构 (Schema)
         const db = getDatabase();
         initializeTables(db);
+
+        // 2.5 检查浏览器环境 (Playwright Chromium)
+        console.log('🔍 正在检查浏览器运行环境...');
+        try {
+            execSync('npx playwright install chromium --with-deps', { stdio: 'inherit' });
+            console.log('✅ 浏览器环境就绪');
+        } catch (err) {
+            console.warn('⚠️ 自动安装浏览器失败，请手动执行: npx playwright install chromium');
+        }
 
         // 3. 建立原生 HTTP 服务器实例
         // 目的：为了将 Express (HTTP) 与 WebSocket 服务器挂载在同一个监听端口上

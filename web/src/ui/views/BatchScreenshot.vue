@@ -255,9 +255,27 @@ const parsedUrls = computed(() => {
 
 const urlCount = computed(() => parsedUrls.value.length)
 
+const validateUrls = () => {
+  const invalidUrls = parsedUrls.value.filter(u => {
+    try {
+      new URL(u)
+      return false
+    } catch (e) {
+      return true
+    }
+  })
+  return invalidUrls
+}
+
 const handleSubmit = async () => {
   if (submitting.value) return
   if (parsedUrls.value.length === 0) return
+
+  const invalidOnes = validateUrls()
+  if (invalidOnes.length > 0) {
+    showError('检测到无效的 URL，请检查拼写（例如是否有 https;// 等错误）：\n' + invalidOnes.slice(0, 3).join('\n'))
+    return
+  }
 
   submitting.value = true
   try {

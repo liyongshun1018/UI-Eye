@@ -4,7 +4,9 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "server": "tsx src/index.ts"
+        "server": "tsx src/index.ts",
+        "postinstall": "npx playwright install chromium",
+        "prepare-env": "npx playwright install chromium"
     },
     "dependencies": {
         "better-sqlite3": "^12.6.0",
@@ -16,7 +18,7 @@
         "p-limit": "^7.2.0",
         "pixelmatch": "^7.1.0",
         "pngjs": "^7.0.0",
-        "puppeteer": "^24.35.0",
+        "playwright": "^1.57.0",
         "resemblejs": "^5.0.0",
         "sharp": "^0.34.5",
         "ws": "^8.19.0",
@@ -32,10 +34,8 @@
         "@types/p-limit": "^2.1.0",
         "@types/pixelmatch": "^5.2.6",
         "@types/pngjs": "^6.0.5",
-        "@types/puppeteer": "^5.4.7",
         "@types/sharp": "^0.31.1",
         "@types/ws": "^8.18.1",
-        "playwright": "^1.57.0",
         "tsx": "^4.19.2"
     }
 }

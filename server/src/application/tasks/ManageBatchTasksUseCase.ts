@@ -1,4 +1,5 @@
 import { IBatchTaskRepository } from '../../domain/repositories/IBatchTaskRepository.js';
+import { IScriptRepository } from '../../domain/repositories/IScriptRepository.js';
 import { RunCompareUseCase } from './RunCompareUseCase.js';
 import wsServer from '../../infrastructure/ws/WSServer.js';
 import pLimit from 'p-limit';
@@ -13,6 +14,7 @@ export class ManageBatchTasksUseCase {
 
     constructor(
         private batchRepo: IBatchTaskRepository,
+        private scriptRepo: IScriptRepository,
         private runCompareUseCase: RunCompareUseCase
     ) { }
 
@@ -47,7 +49,17 @@ export class ManageBatchTasksUseCase {
             stepText: '🔄 正在准备子任务队列...'
         });
 
-        // 2. 构造子任务执行队列
+        // 2. 获取关联的交互脚本逻辑 (如果有)
+        let scriptCode = '';
+        if (task.scriptId) {
+            const script = this.scriptRepo.findById(task.scriptId);
+            if (script) {
+                scriptCode = script.code;
+                console.log(`[批量任务] 任务 ${taskId} 关联脚本: ${script.name}`);
+            }
+        }
+
+        // 3. 构造子任务执行队列
         const jobs = task.urls.map((url, index) => {
             return this.limit(async () => {
                 // [关键修复] 子项开始即推送初始进度，确保前端 UI 即时响应
@@ -87,7 +99,9 @@ export class ManageBatchTasksUseCase {
                                 progress: totalProgress,
                                 stepText: subStepText
                             });
-                        }
+                        },
+                        undefined,
+                        scriptCode
                     );
 
                     // A. 持久化子项结果：核心包含还原度指标回写

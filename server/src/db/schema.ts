@@ -51,6 +51,7 @@ export function initializeTables(db: Database.Database): void {
             step_text TEXT,                            -- 当前批次阶段描述
             avg_similarity REAL,                       -- 批次平均相似度
             total_diff_count INTEGER,                  -- 累计差异点总数
+            script_id TEXT,                            -- 关联的交互脚本 ID
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME,
             completed_at DATETIME
@@ -105,7 +106,14 @@ export function initializeTables(db: Database.Database): void {
         try { db.exec('ALTER TABLE batch_task_items ADD COLUMN error TEXT'); } catch (e) { }
     }
 
-    // 7. 性能优化：为高频查询字段建立索引
+    // 7. 数据平滑迁移逻辑 (batch_tasks)
+    const taskColumns = db.prepare("PRAGMA table_info(batch_tasks)").all() as any[];
+    const taskColNames = taskColumns.map(c => c.name);
+    if (!taskColNames.includes('script_id')) {
+        try { db.exec('ALTER TABLE batch_tasks ADD COLUMN script_id TEXT'); } catch (e) { }
+    }
+
+    // 8. 性能优化：为高频查询字段建立索引
     db.exec('CREATE INDEX IF NOT EXISTS idx_timestamp ON reports(timestamp DESC)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_status ON reports(status)');
 

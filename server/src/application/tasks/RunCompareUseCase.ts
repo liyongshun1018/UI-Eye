@@ -1,5 +1,5 @@
 import { IReportRepository } from '../../domain/repositories/IReportRepository.js';
-import { PuppeteerCaptureAdapter } from '../../infrastructure/adapters/PuppeteerCaptureAdapter.js';
+import { PlaywrightCaptureAdapter } from '../../infrastructure/adapters/PlaywrightCaptureAdapter.js';
 import { ICompareEngine } from '../../domain/services/ICompareEngine.js';
 import { IAIProvider } from '../../domain/services/IAIProvider.js';
 import { VisualClusteringService } from '../../domain/services/VisualClusteringService.js';
@@ -15,7 +15,7 @@ import sharp from 'sharp';
 export class RunCompareUseCase {
     constructor(
         private reportRepo: IReportRepository,          // 报告仓储：负责持久化比对结果
-        private captureAdapter: PuppeteerCaptureAdapter, // 截图适配器：负责从浏览器渲染页面
+        private captureAdapter: PlaywrightCaptureAdapter, // 截图适配器：负责从浏览器渲染页面
         private compareEngine: ICompareEngine,          // 比对引擎：负责像素级精准扫描
         private aiProvider: IAIProvider,                  // AI 服务端：负责理解差异并给出建议
         private visualClustering: VisualClusteringService // 视觉聚类服务：负责将像素差异转化为区域
@@ -33,7 +33,8 @@ export class RunCompareUseCase {
         reportId: string,
         config: ReportConfig,
         onProgress?: (progress: number, stepText: string) => void,
-        externalImages?: { designPath: string, actualPath: string } // 新增：外部图片支持
+        externalImages?: { designPath: string, actualPath: string }, // 新增：外部图片支持
+        scriptCode?: string // 新增：交互脚本支持
     ): Promise<Report> {
         console.log(`[核心流水线] 开始处理任务: ${reportId} -> ${config.url}`);
 
@@ -78,7 +79,8 @@ export class RunCompareUseCase {
                 this.reportRepo.update(reportId, { progress: 30, stepText: '📸 正在驱动检测引擎捕获页面...' });
                 const actualResult = await this.captureAdapter.capture(config.url, {
                     width: viewportWidth,
-                    fullPage: true
+                    fullPage: true,
+                    scriptCode: scriptCode
                 });
                 actualPath = actualResult.path;
                 actualUrl = actualResult.url;

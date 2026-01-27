@@ -17,7 +17,11 @@ export class BatchController {
     async createTask(req: Request, res: Response) {
         try {
             // 解析请求体中的任务参数 (如名称、URL 列表、设计稿映射)
-            const taskId = await this.batchUseCase.createTask(req.body);
+            const data = {
+                ...req.body,
+                scriptId: req.body.script_id || req.body.scriptId
+            };
+            const taskId = await this.batchUseCase.createTask(data);
             return ResponseUtils.success(res, { taskId }, '批量任务已成功录入');
         } catch (error: any) {
             return ResponseUtils.error(res, `创建失败: ${error.message}`);

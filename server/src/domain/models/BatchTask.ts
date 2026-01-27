@@ -26,6 +26,7 @@ export interface BatchTask {
     designSource?: string;              // 设计稿来源 (single 模式下使用)
     compareConfig?: any;                // 批处理通用的比对阈值参数
     aiModel?: string;                   // 指定的 AI 分析引擎
+    scriptId?: string;                  // 关联的交互脚本 ID
 
     // 时间审计
     createdAt: number;        // 创建时间

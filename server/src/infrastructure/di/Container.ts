@@ -1,7 +1,7 @@
 import { SqliteReportRepository } from '../repositories/SqliteReportRepository.js';
 import { SqliteBatchTaskRepository } from '../repositories/SqliteBatchTaskRepository.js';
 import { SqliteScriptRepository } from '../repositories/SqliteScriptRepository.js';
-import { PuppeteerCaptureAdapter } from '../adapters/PuppeteerCaptureAdapter.js';
+import { PlaywrightCaptureAdapter } from '../adapters/PlaywrightCaptureAdapter.js';
 import { ODiffAdapter } from '../adapters/ODiffAdapter.js';
 import { AIAnalyzerAdapter } from '../adapters/AIAnalyzerAdapter.js';
 import { RunCompareUseCase } from '../../application/tasks/RunCompareUseCase.js';
@@ -33,7 +33,7 @@ export class Container {
     }
 
     static getCaptureAdapter() {
-        return this.get('CaptureAdapter', () => new PuppeteerCaptureAdapter());
+        return this.get('CaptureAdapter', () => new PlaywrightCaptureAdapter());
     }
 
     static getCompareEngine() {

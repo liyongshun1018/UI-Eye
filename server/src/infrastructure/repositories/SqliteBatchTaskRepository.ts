@@ -14,8 +14,8 @@ export class SqliteBatchTaskRepository implements IBatchTaskRepository {
     create(task: Partial<BatchTask>): number {
         const db = getDatabase();
         const stmt = db.prepare(`
-            INSERT INTO batch_tasks (name, urls, domain, status, total, design_mode, design_source, compare_config, ai_model)
-            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+            INSERT INTO batch_tasks (name, urls, domain, status, total, design_mode, design_source, compare_config, ai_model, script_id)
+            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
         `);
 
         const result = stmt.run(
@@ -26,7 +26,8 @@ export class SqliteBatchTaskRepository implements IBatchTaskRepository {
             (task as any).designMode || 'single',
             (task as any).designSource || null,
             task.compareConfig ? JSON.stringify(task.compareConfig) : null,
-            task.aiModel || null
+            task.aiModel || null,
+            (task as any).scriptId || (task as any).script_id || null // 兼容性支持
         );
 
         const taskId = result.lastInsertRowid as number;
@@ -66,7 +67,8 @@ export class SqliteBatchTaskRepository implements IBatchTaskRepository {
             totalDiffCount: 'total_diff_count',
             duration: 'duration',
             startedAt: 'started_at',
-            completedAt: 'completed_at'
+            completedAt: 'completed_at',
+            scriptId: 'script_id'
         };
 
         for (const [key, col] of Object.entries(mapping)) {
@@ -158,7 +160,8 @@ export class SqliteBatchTaskRepository implements IBatchTaskRepository {
             designMode: row.design_mode,
             designSource: row.design_source,
             compareConfig: row.compare_config ? JSON.parse(row.compare_config) : null,
-            aiModel: row.ai_model
+            aiModel: row.ai_model,
+            scriptId: row.script_id
         };
     }
 
