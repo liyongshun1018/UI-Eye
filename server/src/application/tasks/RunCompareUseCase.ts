@@ -86,42 +86,46 @@ export class RunCompareUseCase {
                 actualUrl = actualResult.url;
             }
 
-            // 步骤 4：核心算法比对 (60%)
-            if (!designPath || !fs.existsSync(designPath)) {
-                throw new Error(`设计稿不存在: ${config.designSource}`);
+            // 步骤 4+：核心算法比对与 AI 诊断 (仅在提供设计稿时执行)
+            let compareResult: any = null;
+            let diffRegions: any[] = [];
+            let fixes: any[] = [];
+
+            if (designPath && fs.existsSync(designPath)) {
+                this.reportRepo.update(reportId, { progress: 60, stepText: '⚖️ 正在执行像素级比对算法...' });
+                compareResult = await this.compareEngine.compare(designPath, actualPath, {
+                    enableClustering: true
+                });
+
+                this.reportRepo.update(reportId, { progress: 75, stepText: '🔍 正在进行差异区域聚类分析...' });
+                diffRegions = await this.visualClustering.analyzeDiffRegions(compareResult.diffImage.path);
+
+                this.reportRepo.update(reportId, { progress: 85, stepText: '🧠 正在引导 AI 进行视觉偏差诊断...' });
+                fixes = await this.aiProvider.analyze(
+                    {
+                        design: designPath,
+                        actual: actualPath,
+                        diff: compareResult.diffImage.path
+                    },
+                    { ...compareResult, diffRegions }
+                );
+            } else {
+                console.log(`[核心流水线] 跳过比对步骤: 未提供有效设计稿 (${config.designSource})`);
+                this.reportRepo.update(reportId, { progress: 90, stepText: '📸 已完成截图存证 (跳过比对)' });
             }
-
-            this.reportRepo.update(reportId, { progress: 60, stepText: '⚖️ 正在执行像素级比对算法...' });
-            const compareResult = await this.compareEngine.compare(designPath, actualPath, {
-                enableClustering: true
-            });
-
-            // 步骤 5：区域聚类与 AI 诊断 (70% - 90%)
-            this.reportRepo.update(reportId, { progress: 75, stepText: '🔍 正在进行差异区域聚类分析...' });
-            const diffRegions = await this.visualClustering.analyzeDiffRegions(compareResult.diffImage.path);
-
-            this.reportRepo.update(reportId, { progress: 85, stepText: '🧠 正在引导 AI 进行视觉偏差诊断...' });
-            const fixes = await this.aiProvider.analyze(
-                {
-                    design: designPath,
-                    actual: actualPath,
-                    diff: compareResult.diffImage.path
-                },
-                { ...compareResult, diffRegions }
-            );
 
             // 步骤 6：报告封装 (100%)
             const finalReport: Partial<Report> = {
                 status: 'completed',
                 progress: 100,
-                stepText: '✅ 审计流水线执行完毕',
-                similarity: compareResult.similarity,
-                diffPixels: compareResult.diffPixels,
-                totalPixels: compareResult.totalPixels,
+                stepText: (designPath && fs.existsSync(designPath)) ? '✅ 审计流水线执行完毕' : '✅ 截图存证已完成',
+                similarity: compareResult?.similarity || 0,
+                diffPixels: compareResult?.diffPixels || 0,
+                totalPixels: compareResult?.totalPixels || 0,
                 images: {
                     design: config.designSource,
                     actual: actualUrl || normalizeToPublicUrl(actualPath),
-                    diff: compareResult.diffImage.url
+                    diff: compareResult?.diffImage?.url || null
                 },
                 diffRegions,
                 fixes,
