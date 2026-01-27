@@ -72,7 +72,7 @@ export function initializeTables(db: Database.Database): void {
         )
     `);
 
-    // 4. 用户自定义脚本表：存储注入到 Puppeteer 的前置操作脚本
+    // 4. 用户自定义脚本表：存储注入到 Playwright 的前置操作脚本
     db.exec(`
         CREATE TABLE IF NOT EXISTS scripts (
             id TEXT PRIMARY KEY,                       -- 脚本 ID

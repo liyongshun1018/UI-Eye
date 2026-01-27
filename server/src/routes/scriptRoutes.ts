@@ -8,7 +8,7 @@ const scriptUseCase = Container.getManageScriptsUseCase();
 
 /**
  * 自动化注入脚本管理 API 路由集合
- * 职责：管控用于 Puppeteer 预处理 (如自动登录、表单填充) 的 JS 代码片段
+ * 职责：管控用于 Playwright 预处理 (如自动登录、表单填充) 的 JS 代码片段
  */
 
 /**

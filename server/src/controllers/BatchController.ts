@@ -53,7 +53,7 @@ export class BatchController {
 
     /**
      * 启动批量任务扫描序列
-     * 特性：该方法会触发一系列并行/串行的 Puppeteer 截图与比对用例
+     * 特性：该方法会触发一系列并行/串行的 Playwright 截图与比对用例
      */
     async startTask(req: Request, res: Response) {
         const taskId = parseInt(req.params.id as string);

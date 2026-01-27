@@ -75,7 +75,7 @@ app.get('/api/health', (req, res) => res.json({ success: true, message: 'UI-Eye 
 
 // 模块化路由
 app.use('/api/batch', batchRoutes);         // 批量任务相关
-app.use('/api/batch/scripts', scriptRoutes); // Puppeteer 注入脚本管理
+app.use('/api/batch/scripts', scriptRoutes); // Playwright 注入脚本管理
 
 // 通用上传接口
 app.post(['/api/upload', '/api/upload-design'], upload.single('file'), (req, res) => {

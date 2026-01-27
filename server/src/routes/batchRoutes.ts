@@ -30,7 +30,7 @@ router.get('/tasks/:id', catchAsync((req, res) => batchController.getTask(req, r
 
 /**
  * [POST] /api/batch/tasks/:id/start
- * 职责：正式启动后台批处理器，开始执行 Puppeteer 截图与比对逻辑
+ * 职责：正式启动后台批处理器，开始执行 Playwright 截图与比对逻辑
  */
 router.post('/tasks/:id/start', catchAsync((req, res) => batchController.startTask(req, res)));
 
