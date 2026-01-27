@@ -24,12 +24,14 @@
       <p>正在加载脚本数据...</p>
     </div>
 
-    <div v-else-if="filteredScripts.length === 0" class="empty-state">
-      <div class="empty-icon">📂</div>
-      <h3>暂无脚本</h3>
-      <p>您可以创建一个脚本来自动处理登录等复杂交互。</p>
-      <button class="btn-outline" @click="createNewScript">立即创建</button>
-    </div>
+    <EmptyState
+      v-else-if="filteredScripts.length === 0"
+      icon="📂"
+      title="暂无脚本"
+      description="您可以创建一个脚本来自动处理登录等复杂交互。"
+      action-text="立即创建"
+      @action="createNewScript"
+    />
 
     <div v-else class="script-grid">
       <div v-for="script in filteredScripts" :key="script.id" class="script-card">
@@ -50,17 +52,17 @@
       </div>
     </div>
 
-    <!-- 删除确认弹窗 -->
-    <div v-if="showDeleteModal" class="modal-overlay">
-      <div class="modal">
-        <h3>确认删除？</h3>
-        <p>确定要删除脚本 "{{ scriptToDelete?.name }}" 吗？此操作不可撤销。</p>
-        <div class="modal-actions">
-          <button class="btn-cancel" @click="showDeleteModal = false">取消</button>
-          <button class="btn-danger" @click="handleDelete">确认删除</button>
-        </div>
-      </div>
-    </div>
+    <!-- 确认对话框 -->
+    <ConfirmDialog
+      :show="confirmState.show"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-text="confirmState.confirmText"
+      :cancel-text="confirmState.cancelText"
+      :type="confirmState.type"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
 
@@ -69,9 +71,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { batchTaskAPI } from '@core/api'
 import { useDialog } from '@modules/composables/useDialog.ts'
+import { useConfirm } from '@modules/composables/useConfirm.ts'
 import { formatDate } from '@core/utils'
+import EmptyState from '@ui/components/common/EmptyState.vue'
+import ConfirmDialog from '@ui/components/common/ConfirmDialog.vue'
 
 const { showError } = useDialog()
+const { state: confirmState, confirmDelete: confirmDeleteDialog, handleConfirm, handleCancel } = useConfirm()
 
 const router = useRouter()
 const scripts = ref([])
@@ -115,18 +121,14 @@ const editScript = (id) => {
   router.push(`/scripts/${id}`)
 }
 
-const confirmDelete = (script) => {
-  scriptToDelete.value = script
-  showDeleteModal.value = true
-}
-
-const handleDelete = async () => {
-  if (!scriptToDelete.value) return
+const confirmDelete = async (script) => {
+  const confirmed = await confirmDeleteDialog(script.name)
+  if (!confirmed) return
+  
   try {
-    const response = await batchTaskAPI.deleteScript(scriptToDelete.value.id)
+    const response = await batchTaskAPI.deleteScript(script.id)
     if (response.success) {
-      scripts.value = scripts.value.filter(s => s.id !== scriptToDelete.value.id)
-      showDeleteModal.value = false
+      scripts.value = scripts.value.filter(s => s.id !== script.id)
     }
   } catch (err) {
     showError('删除失败: ' + err.message)

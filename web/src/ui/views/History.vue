@@ -11,12 +11,14 @@
         <p>正在加载记录...</p>
       </div>
 
-      <div v-else-if="reports.length === 0" class="empty-state card glass">
-        <div class="empty-icon">📁</div>
-        <h3>暂无对比记录</h3>
-        <p>还没有进行过 UI 对比，快去开始第一次走查吧！</p>
-        <router-link to="/compare" class="btn btn-primary mt-4">开始对比</router-link>
-      </div>
+      <EmptyState
+        v-else-if="reports.length === 0"
+        icon="📁"
+        title="暂无对比记录"
+        description="还没有进行过 UI 对比，快去开始第一次走查吧！"
+        action-text="开始对比"
+        @action="router.push('/compare')"
+      />
 
       <div v-else>
         <!-- 对比记录表格 -->
@@ -52,9 +54,21 @@
                   <span class="report-time">{{ formatDate(report.timestamp) }}</span>
                 </td>
                 <td class="col-score">
-                  <span v-if="report.status === 'completed'" class="report-score">
-                    <strong>{{ report.similarity?.toFixed(1) }}%</strong>
-                  </span>
+                  <div v-if="report.status === 'completed'" class="similarity-cell">
+                    <span 
+                      class="similarity-value" 
+                      :class="getSimilarityClass(report.similarity)"
+                    >
+                      {{ report.similarity?.toFixed(1) }}%
+                    </span>
+                    <div class="similarity-bar">
+                      <div 
+                        class="similarity-fill" 
+                        :class="getSimilarityClass(report.similarity)"
+                        :style="{ width: report.similarity + '%' }"
+                      ></div>
+                    </div>
+                  </div>
                   <span v-else class="text-muted">-</span>
                 </td>
                 <td class="col-action">
@@ -110,6 +124,18 @@
         </div>
       </div>
     </div>
+
+    <!-- 确认对话框 -->
+    <ConfirmDialog
+      :show="confirmState.show"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-text="confirmState.confirmText"
+      :cancel-text="confirmState.cancelText"
+      :type="confirmState.type"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
 
@@ -124,9 +150,14 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { compareAPI } from '@core/api/compare'
 import { useDialog } from '@modules/composables/useDialog.ts'
+import { useConfirm } from '@modules/composables/useConfirm.ts'
+import { getSimilarityClass as getSimilarityClassUtil } from '@core/utils/similarity'
 import { formatDate } from '@core/utils'
+import EmptyState from '@ui/components/common/EmptyState.vue'
+import ConfirmDialog from '@ui/components/common/ConfirmDialog.vue'
 
-const { showConfirm, showError } = useDialog()
+const { showError } = useDialog()
+const { state: confirmState, confirmDelete, handleConfirm, handleCancel } = useConfirm()
 
 const router = useRouter()
 /** @type {import('vue').Ref<any[]>} */
@@ -223,7 +254,7 @@ const viewReport = (id) => {
  * @param {string} id - 报告唯一标识符
  */
 const deleteReport = async (id) => {
-  const confirmed = await showConfirm('确定要删除这条对比记录吗？删除后将无法查看对应的视觉对比图。')
+  const confirmed = await confirmDelete()
   if (!confirmed) return
   
   try {
@@ -245,6 +276,13 @@ const deleteReport = async (id) => {
     console.error('删除操作失败:', err)
     showError('由于网络原因，删除操作未能成功，请刷新重试。')
   }
+}
+
+/**
+ * 获取相似度颜色类名
+ */
+const getSimilarityClass = (similarity) => {
+  return getSimilarityClassUtil(similarity || 0)
 }
 
 /**
@@ -324,11 +362,12 @@ onMounted(() => {
 }
 
 .history-table td {
-  padding: 0.75rem 1rem;
+  padding: 1.25rem 1rem;
   font-size: var(--font-size-sm);
   color: var(--text-primary);
   line-height: 1.5;
   vertical-align: middle;
+  min-height: 60px;
 }
 
 /* 列宽设置 - 优化比例 */
@@ -414,6 +453,68 @@ onMounted(() => {
   font-size: var(--font-size-base);
   font-variant-numeric: tabular-nums;
 }
+
+/* 相似度单元格 */
+.similarity-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.similarity-value {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-base);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 相似度颜色编码 */
+.similarity-value.similarity-excellent {
+  color: #10b981;
+}
+
+.similarity-value.similarity-good {
+  color: #3b82f6;
+}
+
+.similarity-value.similarity-warning {
+  color: #f59e0b;
+}
+
+.similarity-value.similarity-poor {
+  color: #ef4444;
+}
+
+/* 相似度进度条 */
+.similarity-bar {
+  width: 60px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.similarity-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.similarity-fill.similarity-excellent {
+  background: #10b981;
+}
+
+.similarity-fill.similarity-good {
+  background: #3b82f6;
+}
+
+.similarity-fill.similarity-warning {
+  background: #f59e0b;
+}
+
+.similarity-fill.similarity-poor {
+  background: #ef4444;
+}
+
 
 .text-muted {
   color: var(--text-tertiary);
