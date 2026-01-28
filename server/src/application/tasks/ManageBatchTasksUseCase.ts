@@ -76,8 +76,8 @@ export class ManageBatchTasksUseCase {
                 const config = {
                     url,
                     designSource: task.compareConfig?.designSource || (task as any).designSource,
-                    aiModel: task.aiModel,
-                    viewportWidth: task.compareConfig?.viewport?.width || 1920
+                    aiModel: task.aiModel
+                    // viewportWidth 故意留空，交给 RunCompareUseCase 智能探测设计稿宽度
                 };
 
                 console.log(`[批量任务] URL: ${url}, 视口宽度: ${config.viewportWidth}, 原始配置:`, task.compareConfig);

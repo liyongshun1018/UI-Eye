@@ -70,16 +70,37 @@ export class ODiffAdapter implements ICompareEngine {
                     .toFile(alignedActualImg);
             }
 
-            console.log('[ODiff引擎] 正在分析视觉矩阵...');
+            // 3. 准备 ODiff 专用忽略区域格式 (x1, y1, x2, y2)
+            const ignoreRegions = (options.ignoreRegions || [])
+                .filter(r => r && typeof r.x === 'number' && r.width > 0 && r.height > 0)
+                .map(r => ({
+                    x1: Math.floor(r.x),
+                    y1: Math.floor(r.y),
+                    x2: Math.floor(r.x + r.width),
+                    y2: Math.floor(r.y + r.height)
+                }));
 
-            // 3. 调用 native binary 进行比对
-            const result = await compare(finalBase, finalActual, diffPath, {
-                threshold: options.threshold || 0.1,
+            // 4. 调用 native binary 进行比对
+            // 这里的 odiffOptions 初始对象必须绝对干净，不包含任何可选键
+            const odiffOptions: any = {
+                threshold: options.tolerance ?? (options.threshold || 0.1),
                 antialiasing: options.includeAA === false,
                 failOnLayoutDiff: false
-            });
+            };
 
-            // 4. 清理临时生成的对齐文件 (如有)
+            // 只有当 ignoreRegions 确实存在有效数据时，才在对象上定义该属性
+            // 这种动态属性追加方式比 { ignoreRegions: length > 0 ? regions : undefined } 更稳健，
+            // 因为 Object.entries(odiffOptions) 将完全不包含该键，从而防止被外部库误解析。
+            if (ignoreRegions && ignoreRegions.length > 0) {
+                odiffOptions.ignoreRegions = ignoreRegions;
+                console.log(`[ODiff引擎] 正在执行核心比对... (已激活掩模: ${ignoreRegions.length} 个区域)`);
+            } else {
+                console.log('[ODiff引擎] 正在执行全量图像比对... (未检测到掩模区域)');
+            }
+
+            const result = await compare(finalBase, finalActual, diffPath, odiffOptions);
+
+            // 5. 清理临时生成的对齐文件 (如有)
             if (!isBaseSizeMatch && fs.existsSync(alignedBaseImg)) fs.unlinkSync(alignedBaseImg);
             if (!isActualSizeMatch && fs.existsSync(alignedActualImg)) fs.unlinkSync(alignedActualImg);
 

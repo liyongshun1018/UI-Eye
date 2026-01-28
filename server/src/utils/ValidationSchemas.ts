@@ -6,14 +6,21 @@ import { Request, Response, NextFunction } from 'express';
  * 职责：强制要求前端传入有效的 URL 和设计稿标识，并对可选参数进行类型约束
  */
 export const compareSchema = z.object({
-    url: z.string().url('目标地址必须是合法的 URL 格式'),
-    designSource: z.string().min(1, '设计稿来源路径不能为空'),
+    url: z.string().url('目标地址必须是合法的 URL 格式').optional(),
+    designSource: z.string().min(1, '设计稿来源路径不能为空').optional(),
+    viewportWidth: z.number().optional(),
     options: z.object({
         tolerance: z.number().optional().default(0.1),
         viewport: z.object({
             width: z.number(),
             height: z.number()
-        }).optional()
+        }).optional(),
+        ignoreRegions: z.array(z.object({
+            x: z.number(),
+            y: z.number(),
+            width: z.number(),
+            height: z.number()
+        })).optional()
     }).optional()
 });
 

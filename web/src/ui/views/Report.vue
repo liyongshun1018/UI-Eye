@@ -44,6 +44,8 @@
             :url="reportData.config.url"
           />
 
+          <!-- 报告头部不再包含操作按钮 -->
+
           <!-- 图片对比画廊 -->
           <ComparisonGallery
             v-model="comparisonMode"
@@ -60,11 +62,11 @@
           />
 
           <!-- CSS 修复建议 -->
-           <CSSFixesSection
-             v-if="reportData.fixes && reportData.fixes.length > 0"
-             :fixes="reportData.fixes"
-             @preview="openPreview"
-           />
+          <CSSFixesSection
+            v-if="reportData.fixes && reportData.fixes.length > 0"
+            :fixes="reportData.fixes"
+            @preview="openPreview"
+          />
          </template>
       </div>
     </div>
@@ -172,6 +174,8 @@ const openPreview = (fix) => {
     window.open(url, '_blank')
   }
 }
+
+
 </script>
 
 <style scoped>
@@ -211,6 +215,34 @@ const openPreview = (fix) => {
 .spinner {
   font-size: 48px;
   margin-bottom: 24px;
+}
+
+/* Mask Editor Workspace */
+.mask-editor-workspace {
+  margin-top: 32px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 32px;
+}
+
+.workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.workspace-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 /* 全局动画 */

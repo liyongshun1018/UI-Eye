@@ -29,6 +29,12 @@ export interface ReportConfig {
             width: number;
             height: number;
         };
+        ignoreRegions?: Array<{
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        }>;
     };
 }
 

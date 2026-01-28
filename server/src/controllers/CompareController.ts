@@ -4,7 +4,7 @@ import { ReportMapper } from '../application/mappers/ReportMapper.js';
 import ResponseUtils from '../utils/ResponseUtils.js';
 import fs from 'fs';
 import path from 'path';
-import { DIRS, normalizeToPublicUrl } from '../utils/PathUtils.js';
+import { DIRS, normalizeToPublicUrl, resolvePublicPath, resolveDesignPath } from '../utils/PathUtils.js';
 
 /**
  * CompareController - 视觉对比核心业务控制器
@@ -33,7 +33,6 @@ export class CompareController {
         });
 
         // 2. 发起异步流：截图 -> 像素比对 -> AI 分析
-        // 注意：此处不使用 await 阻塞请求，而是立即向前端返回 reportId
         this.runCompareUseCase.execute(reportId, config).catch(err => {
             console.error('[控制器] 视觉对比链路中断:', err);
         });

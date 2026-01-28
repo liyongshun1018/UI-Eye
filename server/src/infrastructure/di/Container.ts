@@ -50,6 +50,7 @@ export class Container {
         return this.get('VisualClustering', () => new VisualClusteringService());
     }
 
+
     // --- 应用层用例 (Application Tasks) ---
 
     static getRunCompareUseCase() {

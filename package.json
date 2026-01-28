@@ -11,7 +11,8 @@
     "build": "npm run build -w web",
     "server": "npm run server -w server",
     "test": "npm run test -w web",
-    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
+    "dev:all": "npm run kill-ports && concurrently \"npm run dev\" \"npm run server\"",
+    "kill-ports": "lsof -ti:3000,5173 | xargs kill -9 2>/dev/null || echo 'Ports are clean'",
     "install:all": "npm install",
     "doctor": "node server/scripts/env-check.js"
   },

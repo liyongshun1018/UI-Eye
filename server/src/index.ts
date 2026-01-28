@@ -22,24 +22,13 @@ async function bootstrap() {
         const db = getDatabase();
         initializeTables(db);
 
-        // 2.5 检查浏览器环境 (Playwright Chromium)
-        console.log('🔍 正在检查浏览器运行环境...');
-        try {
-            execSync('npx playwright install chromium --with-deps', { stdio: 'inherit' });
-            console.log('✅ 浏览器环境就绪');
-        } catch (err) {
-            console.warn('⚠️ 自动安装浏览器失败，请手动执行: npx playwright install chromium');
-        }
-
         // 3. 建立原生 HTTP 服务器实例
-        // 目的：为了将 Express (HTTP) 与 WebSocket 服务器挂载在同一个监听端口上
         const server = http.createServer(app);
 
         // 4. 初始化跨时空通讯：WebSocket 服务器
-        // 职责：实现后端任务执行进度 (截图/比对/AI 等) 的准实时推送
         wsServer.initialize(server);
 
-        // 5. 开启端口监听
+        // 5. 开启端口监听 (优先开启，防止 Vite 代理 502/ECONNREFUSED)
         server.listen(port, () => {
             console.log(`
   ✅ ==========================================
@@ -49,6 +38,18 @@ async function bootstrap() {
   调试模式: ${ConfigService.isDevelopment ? '开启' : '关闭'}
   ==============================================
             `);
+
+            // 6. 异步检查浏览器环境，不阻塞 API 端口服务
+            setTimeout(() => {
+                console.log('🔍 [背景任务] 正在检查开发环境浏览器依赖...');
+                try {
+                    // 仅在开发环境下尝试检查/安装，且不阻塞主进程
+                    execSync('npx playwright install chromium', { stdio: 'ignore' });
+                    console.log('✅ [背景任务] 浏览器环境验证完成');
+                } catch (err) {
+                    console.warn('⚠️ [背景任务] 自动验证浏览器环境失败，若无法执行比对任务，请手动执行: npx playwright install chromium');
+                }
+            }, 1000);
         });
 
     } catch (error: any) {

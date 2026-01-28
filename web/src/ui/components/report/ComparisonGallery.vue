@@ -4,7 +4,6 @@
       v-model="internalMode"
       :modes="comparisonModes"
       title="视觉对比"
-      :url="reportData.config.url"
     />
     
     <div class="comparison-container">

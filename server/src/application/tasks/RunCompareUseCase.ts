@@ -58,19 +58,22 @@ export class RunCompareUseCase {
             onProgress?.(10, '🚀 正在初始化比对环境...');
 
             // 步骤 2：确定视口宽度 (20%)
-            // 优先级：用户配置 > 设计稿宽度 > 默认值
-            let viewportWidth = config.viewportWidth || 1920;
+            // 优先级：显式 viewportWidth > 隐式 options.viewport.width > 设计稿宽度 > 默认值 1920
+            const rawViewportWidth = config.viewportWidth || config.options?.viewport?.width;
+            let viewportWidth = rawViewportWidth || 1920;
+
             const designPath = resolveDesignPath(config.designSource);
             if (designPath && fs.existsSync(designPath)) {
                 onProgress?.(20, '🎨 正在分析设计稿规格...');
-                // 仅在用户未明确指定视口宽度时，才从设计稿读取
-                if (!config.viewportWidth) {
+                // 仅在用户没有手动指定非默认视口宽度时，才采用设计稿宽度
+                // 注意：由于前端默认值可能是 375，这里为了“更智能”，如果 rawViewportWidth 未提供，强制嗅探
+                if (!rawViewportWidth) {
                     const metadata = await sharp(designPath).metadata();
                     if (metadata.width) viewportWidth = metadata.width;
                 }
             }
 
-            console.log(`[RunCompareUseCase] 任务 ${reportId}, 配置的视口宽度: ${config.viewportWidth}, 最终使用: ${viewportWidth}`);
+            console.log(`[RunCompareUseCase] 任务 ${reportId}, 传入宽度: ${rawViewportWidth}, 最终采用视口: ${viewportWidth}`);
 
             // 步骤 3：获取实测图 (30% - 50%)
             let actualPath = '';
@@ -90,6 +93,17 @@ export class RunCompareUseCase {
                 });
                 actualPath = actualResult.path;
                 actualUrl = actualResult.url;
+
+                // [关键修复] 强制宽度裁剪：解决 Playwright fullPage 截图在页面溢出时宽度超标的问题
+                // 这确保了实测图与 viewportWidth (即设计稿宽度) 在物理像素上绝对对齐
+                const actualMeta = await sharp(actualPath).metadata();
+                if (actualMeta.width && actualMeta.width !== viewportWidth) {
+                    console.log(`[RunCompareUseCase] 检测到页面溢出 (Capture: ${actualMeta.width}px, Viewport: ${viewportWidth}px), 执行物理裁剪...`);
+                    const buffer = await sharp(actualPath)
+                        .extract({ left: 0, top: 0, width: viewportWidth, height: actualMeta.height || 0 })
+                        .toBuffer();
+                    fs.writeFileSync(actualPath, buffer);
+                }
             }
 
             // 步骤 4+：核心算法比对与 AI 诊断 (仅在提供设计稿时执行)
@@ -100,7 +114,9 @@ export class RunCompareUseCase {
             if (designPath && fs.existsSync(designPath)) {
                 this.reportRepo.update(reportId, { progress: 60, stepText: '⚖️ 正在执行像素级比对算法...' });
                 compareResult = await this.compareEngine.compare(designPath, actualPath, {
-                    enableClustering: true
+                    enableClustering: true,
+                    tolerance: config.options?.tolerance,
+                    ignoreRegions: config.options?.ignoreRegions
                 });
 
                 this.reportRepo.update(reportId, { progress: 75, stepText: '🔍 正在进行差异区域聚类分析...' });

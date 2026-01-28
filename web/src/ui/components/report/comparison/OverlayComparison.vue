@@ -152,13 +152,14 @@ const handleResetZoom = () => {
 .overlay-layer {
   grid-area: 1 / 1;
   display: block;
-  /* 移除 max-width，允许 JS 强行同步尺寸 */
+  /* 关键修复：禁止强制拉伸，保持原始物理尺寸 */
   width: auto;
   height: auto;
-  object-fit: fill; /* 确保强制拉伸到基准图大小 */
+  object-fit: none; 
   transition: opacity 0.3s ease, transform 0.3s ease;
   pointer-events: none;
   z-index: 2;
+  /* 对齐方式必须与基准图一致 */
   transform-origin: top center;
 }
 

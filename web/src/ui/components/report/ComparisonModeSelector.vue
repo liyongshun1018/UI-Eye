@@ -1,14 +1,8 @@
 <template>
   <div class="comparison-mode-selector">
-    <div class="header-content">
-      <div class="section-title-group">
-        <span class="title-icon">👁️</span>
-        <h2 class="section-title">{{ title }}</h2>
-      </div>
-      <div v-if="url" class="page-url-info">
-        <span class="url-label">测试页面:</span>
-        <a :href="url" target="_blank" class="url-link">{{ url }}</a>
-      </div>
+    <div class="section-title-group">
+      <span class="title-icon">👁️</span>
+      <h2 class="section-title">{{ title }}</h2>
     </div>
     <div class="mode-switcher-pill">
       <button
@@ -40,8 +34,7 @@
 defineProps({
   modelValue: String,
   modes: Array,
-  title: String,
-  url: String
+  title: String
 })
 
 /**
@@ -82,30 +75,6 @@ defineEmits(['update:modelValue'])
   letter-spacing: -0.01em;
 }
 
-.page-url-info {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-}
-
-.url-label {
-  color: var(--text-tertiary);
-  font-weight: 500;
-}
-
-.url-link {
-  color: var(--accent-primary);
-  text-decoration: none;
-  word-break: break-all;
-  transition: opacity 0.2s;
-}
-
-.url-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
-}
 
 /* 仿分段选择器样式的药丸容器 */
 .mode-switcher-pill {

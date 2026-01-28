@@ -102,6 +102,20 @@ app.post('/api/lanhu/fetch', (req, res) => {
     res.json({ success: true, message: '兰湖数据服务已就绪' });
 });
 
+// 核心增强：SPA 路由重定向兜底 (开发环境专用)
+// 职责：当 Puppeteer 或用户直接访问后端路由（如 /report/:id）时，
+// 如果是开发环境，将其引导至 Vite 开发服务器以支持 SPA 路由
+app.use((req, res, next) => {
+    // 匹配 /report/ 开头的非 API 请求
+    if (req.path.startsWith('/report/') && !req.path.startsWith('/api') && process.env.NODE_ENV === 'development') {
+        const protocol = req.protocol;
+        // 强制导向 127.0.0.1 以确保全栈通信稳定
+        console.log(`[路由重定向] 检测到 SPA 报告路径，正在导向前端开发服务器: ${req.path}`);
+        return res.redirect(`${protocol}://127.0.0.1:5173${req.originalUrl}`);
+    }
+    next();
+});
+
 /**
  * 6. 全局错误捕获中间件
  * 特性：统筹处理异步抛出的 AppError 和 未捕获的基础 Error

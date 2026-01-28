@@ -79,53 +79,114 @@ export abstract class AIModelBase {
     protected buildPrompt(compareResult: any): string {
         const regionsJson = JSON.stringify(compareResult.diffRegions || [], null, 2);
 
-        return `你是一个顶级的前端 UI 视觉审计与业务分析专家。请对比提供的 [设计稿]、[实测截图] 以及 [差异高亮图]，并参考以下量化指标：
-    
-    1. 总体指标：
-       - 视觉相似度：${compareResult.similarity}%
-       - 差异像素点：${compareResult.diffPixels}
-    
-    2. 发现的差异区域 (Diff Regions):
-    ${regionsJson}
-    
-    3. 核心分析任务：
-       - **技术诊断**：针对每一个差异区域的 ID，分析颜色、字体、间距等 CSS 层面的偏差。
-       - **业务审计**：识别是否存在功能缺失（例如设计稿有按钮但实测图没有）、文字内容错误（例如文案不一致）或逻辑漏洞。
-       - **一一对应**：你的输出必须与 Region ID 精准关联。
-    
-    4. 输出约束：
-       - 必须返回 JSON 数组。
-       - **建议类型**：type 字段可取值 "color|font|spacing|layout|content|feature|other"。
-       - **纠偏建议**：
-         - 对于技术问题，提供 currentCSS 和 suggestedCSS。
-         - 对于业务/功能问题，可以在 advice 字段提供纯文字版的改进建议，此时 CSS 字段可留空。
-       - **[严禁]**：禁止产出无效的重复样式建议。
-    
-    JSON 格式示例：
-    [
-      {
-        "regionId": 1, 
-        "priority": "critical|high|medium|low",
-        "type": "feature", // 业务/功能缺失
-        "description": "Region #1 发现功能缺失：设计稿包含‘分享链接’按钮，但在实测页面中未找到。",
-        "advice": "请检查该模块的业务逻辑开关或权限设置，确保该交互组件已被加载。",
-        "selector": ".share-container",
-        "currentCSS": "",
-        "suggestedCSS": "",
-        "impact": "用户无法分享内容，严重影响业务转化"
-      }
-    ]`;
+        return `你是一位拥有世界级审美的资深前端 UI/UX 视觉审计专家，专门负责检测设计稿与线上页面的微小偏差。
+请深度对比 [设计稿]、[实测截图] 以及 [差异高亮图]，并基于以下数据进行“像素级”诊断：
+
+**1. 核心量化指标**
+   - 整体相似度: ${compareResult.similarity}%
+   - 差异像素: ${compareResult.diffPixels}
+   - 系统检测到的差异区域: ${regionsJson}
+
+**2. 💥 重大变革：审计策略 (Auditing Strategy)**
+
+> [!IMPORTANT]
+> **不要被系统检测到的差异区域 (regions) 所局限。** 
+> 即使系统只返回了一个巨大的差异区域，你也必须对该区域进行“二次深度扫描”，找出其中每一个具体的不一致组件。
+> **目标：** 一个差异区域 (Region) 应该被拆解为多个具体的修复建议项。
+
+   **2.1 自顶向下扫描逻辑：**
+   1. **布局框架 (Layout)**: 整体容器宽度、Flex 换行、Grid 网格、导航栏高度。
+   2. **组件一致性 (Components)**: 按钮圆角尺寸、图标大小、输入框边框色。
+   3. **细腻质感 (Aesthetics)**: 投影模糊半径、背景渐变方向、元素透明度 (Opacity)。
+   4. **文字排版 (Typography)**: 字距 (letter-spacing)、行高 (line-height)、字体粗细。
+
+**3. 深度诊断维度**
+
+   - **根因推断 (Root Cause)**: 必须指出是 CSS 中的哪个具体属性 (如 \`box-sizing\`, \`flex-shrink\`, \`font-family\`) 导致了偏差。
+   - **视觉设计原则**: 评估是否违反了“亲密性 (Proximity)”、“视觉平衡 (Visual Balance)”或“节奏感”。
+   - **用户感知影响**: 该偏差是否会导致用户在视觉上觉得页面“廉价”、“乱槽槽”或“不可信”。
+
+**4. 输出约束 (Output Rules)**
+
+   - **格式：** 必须返回严格的 JSON 数组。
+   - **细粒度要求：** 对于大型差异区域，必须拆分为多个对象。
+   - **CSS 修复代码：** 必须提供可直接使用的代码，例如：\`margin: 12px 0; border-radius: 8px;\`。
+   - **选择器 (Selector)：** 尽可能写出逻辑严密的 CSS 选择器 (如 \`.card-item .btn-primary\`)。
+
+**5. 期望的回复结构示例**
+
+\`\`\`json
+[
+  {
+    "regionId": 1,
+    "priority": "critical",
+    "type": "layout",
+    "reasoning": "由于设计稿使用了 1440px 容器而实测页面为流式布局，导致顶部 Banner 在大屏下被拉伸，比例失调。",
+    "description": "顶栏 Banner 高度从 400px 变为了 520px，导致首屏内容显示不全。",
+    "designPrinciple": "Hierarchy (视觉层级) 遭到破环",
+    "selector": ".hero-banner",
+    "currentCSS": "height: auto; width: 100%;",
+    "suggestedCSS": "max-width: 1440px; margin: 0 auto; aspect-ratio: 16 / 9;",
+    "fixDifficulty": "medium",
+    "estimatedTime": "15min"
+  },
+  {
+    "regionId": 1, 
+    "priority": "high",
+    "type": "color",
+    "reasoning": "实测截图背景色比设计稿更亮，可能是因为父级容器重叠了多个背景层。 ",
+    "description": "背景颜色偏差：设计稿 #F8FAFC vs 线上 #FFFFFF。",
+    "selector": ".main-content",
+    "currentCSS": "background: #fff;",
+    "suggestedCSS": "background: var(--slate-50, #f8fafc);",
+    "fixDifficulty": "simple",
+    "estimatedTime": "2min"
+  }
+]
+\`\`\`
+
+**6. 最后的严令**
+- **严禁** 返回单个包含所有内容的模糊项。
+- **严禁** 在 JSON 外部包裹 Markdown 代码块。
+- **务必** 捕捉那些只有顶尖设计师才能发现的 1 - 2 像素对齐偏差。`;
     }
 
     /**
-     * 基础设施：标准格式化日志记录
+     * 基础设施:标准格式化日志记录
+     * 支持字符串、对象和多行内容的打印
      */
-    protected log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
-        const prefix = `[AI供应商:${this.name}]`;
+    protected log(message: string | object, level: 'info' | 'warn' | 'error' = 'info'): void {
+        const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        const prefix = `[${timestamp}] [AI供应商:${this.name}]`;
+
+        // 如果是对象,格式化为 JSON
+        const content = typeof message === 'object'
+            ? JSON.stringify(message, null, 2)
+            : message;
+
         switch (level) {
-            case 'error': console.error(prefix, message); break;
-            case 'warn': console.warn(prefix, message); break;
-            default: console.log(prefix, message);
+            case 'error':
+                console.error(prefix, content);
+                break;
+            case 'warn':
+                console.warn(prefix, content);
+                break;
+            default:
+                console.log(prefix, content);
+        }
+    }
+
+    /**
+     * 辅助方法:打印分隔线,用于区分不同的日志块
+     */
+    protected logSeparator(title?: string): void {
+        const line = '='.repeat(80);
+        if (title) {
+            const padding = Math.floor((80 - title.length - 2) / 2);
+            const paddedTitle = '='.repeat(padding) + ` ${title} ` + '='.repeat(padding);
+            console.log(`\n${paddedTitle}\n`);
+        } else {
+            console.log(`\n${line}\n`);
         }
     }
 }

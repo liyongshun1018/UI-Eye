@@ -66,3 +66,15 @@ export const resolveDesignPath = (source?: string): string => {
     }
     return source;
 };
+
+/**
+ * 职责：反向解析：将 Web 公开 URL 还原为本地物理磁盘路径
+ */
+export const resolvePublicPath = (url?: string): string => {
+    if (!url) return '';
+    const filename = path.basename(url);
+    if (url.startsWith(URL_PREFIXES.REPORTS)) return path.join(DIRS.REPORTS, filename);
+    if (url.startsWith(URL_PREFIXES.BATCH_SCREENSHOTS)) return path.join(DIRS.BATCH_SCREENSHOTS, filename);
+    if (url.startsWith(URL_PREFIXES.UPLOADS)) return path.join(DIRS.UPLOADS, filename);
+    return url; // 若不匹配前缀，则按原样返回（支持外部注入的绝对路径）
+};

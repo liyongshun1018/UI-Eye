@@ -8,6 +8,9 @@
         <span>{{ url }}</span>
       </div>
     </div>
+    <div class="header-actions">
+      <slot name="actions"></slot>
+    </div>
     <div class="score-display">
       <div class="score-circle">
         <svg viewBox="0 0 100 100">
@@ -97,6 +100,44 @@ const formattedDate = computed(() => {
 
 .score-display {
   flex-shrink: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-action-outline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-action-outline:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+.btn-action-outline.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.btn-icon {
+  font-size: 16px;
 }
 
 .score-circle {
