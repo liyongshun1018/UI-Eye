@@ -43,21 +43,21 @@
           <td class="actions-cell text-right">
             <div class="action-group">
               <button 
-                class="action-btn-text" 
+                class="btn btn-secondary btn-sm" 
                 @click="$emit('view', task.id)"
               >
                 报告详情
               </button>
               <button 
                 v-if="task.status === 'running'"
-                class="action-btn-text monitor" 
+                class="btn btn-secondary btn-sm monitor" 
                 @click="$emit('monitor', task.id)"
               >
                 实时监控
               </button>
               <button 
                 v-if="['completed', 'failed'].includes(task.status)"
-                class="action-btn-text delete" 
+                class="btn btn-secondary btn-sm delete" 
                 @click="$emit('delete', task.id)"
               >
                 删除
@@ -85,48 +85,76 @@ defineEmits(['view', 'monitor', 'delete'])
 </script>
 
 <style scoped>
+
 .batch-task-table-wrapper {
   padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.4);
+  /* Remove wrapper card style to let rows float */
+  background: transparent;
+  border: none;
+  overflow: visible;
 }
 
 .batch-task-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 12px; /* Gap between rows */
   font-size: 14px;
+}
+
+.batch-task-table thead tr {
+  background: transparent;
+  box-shadow: none;
 }
 
 .batch-task-table th {
   text-align: center;
-  padding: 12px 16px;
-  background: rgba(248, 250, 252, 0.8);
-  color: var(--text-secondary);
+  padding: 0 16px 8px;
+  background: transparent;
+  color: var(--text-tertiary);
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border-color);
+  border: none;
 }
 
+/* Floating Card Rows */
 .task-row {
-  transition: background 0.2s;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.02);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+/* Rounded corners for the row (applied to first/last cells) */
+.batch-task-table td:first-child {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+.batch-task-table td:last-child {
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .task-row:hover {
-  background: rgba(241, 245, 249, 0.5);
-}
-
-.task-row:last-child {
-  border-bottom: none;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.95);
+  position: relative;
 }
 
 .batch-task-table td {
-  padding: 10px 16px;
+  padding: 16px; /* Larger padding for card feel */
   vertical-align: middle;
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.5);
+  border-bottom: 1px solid rgba(255,255,255,0.5);
 }
+
+.batch-task-table td:first-child { border-left: 1px solid rgba(255,255,255,0.5); }
+.batch-task-table td:last-child { border-right: 1px solid rgba(255,255,255,0.5); }
 
 .id-cell {
   color: var(--text-tertiary);
@@ -137,20 +165,28 @@ defineEmits(['view', 'monitor', 'delete'])
 .task-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .type-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(241, 245, 249, 0.8);
+  border-radius: 8px;
   font-size: 16px;
 }
 
 .task-name {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
   max-width: 240px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.95rem;
 }
 
 .progress-cell {
@@ -166,7 +202,7 @@ defineEmits(['view', 'monitor', 'delete'])
 .progress-bar-mini {
   flex: 1;
   height: 6px;
-  background: #e2e8f0;
+  background: var(--bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -185,24 +221,25 @@ defineEmits(['view', 'monitor', 'delete'])
 }
 
 .progress-fill.failed {
-  background: #f87171;
+  background: var(--error);
 }
 
 .progress-text {
   font-size: 12px;
   font-weight: 600;
   font-family: var(--font-mono);
-  min-width: 45px;
+  min-width: 50px;
   text-align: right;
 }
 
-.success-count { color: #10b981; }
+.success-count { color: var(--success); }
 .separator { color: var(--text-tertiary); margin: 0 2px; }
 .total-count { color: var(--text-secondary); }
 
 .time-cell {
   color: var(--text-tertiary);
   font-size: 12px;
+  font-family: var(--font-mono);
 }
 
 .no-wrap {
@@ -211,38 +248,54 @@ defineEmits(['view', 'monitor', 'delete'])
 
 .actions-cell {
   padding: 8px 16px;
-  width: 180px;
+  width: 200px; /* 增加宽度以容纳按钮 */
+  white-space: nowrap;
 }
 
 .action-group {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 8px;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+  flex-wrap: nowrap; /* 禁止换行 */
+}
+
+.task-row:hover .action-group {
+  opacity: 1;
 }
 
 .action-btn-text {
-  background: transparent;
-  border: none;
-  font-size: 13px;
+  background: white;
+  border: 1px solid var(--border-color);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--accent-primary);
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px 0;
+  padding: 6px 12px;
+  border-radius: 6px;
   transition: all 0.2s;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
 }
 
 .action-btn-text:hover {
-  text-decoration: underline;
-  opacity: 0.8;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.05);
+  transform: translateY(-1px);
 }
 
-.action-btn-text.delete {
+.action-btn-text.delete:hover {
+  border-color: var(--error);
   color: var(--error);
+  background: rgba(239, 68, 68, 0.05);
 }
 
 .action-btn-text.monitor {
-  color: #f59e0b;
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .text-right { text-align: right; }

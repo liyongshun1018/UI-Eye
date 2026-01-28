@@ -1,6 +1,6 @@
 <template>
   <div class="compare-page">
-    <div class="container-wide">
+    <div class="container">
       <div class="page-header">
         <h1 class="page-title">开始对比</h1>
         <p class="page-subtitle">配置对比参数，开始 AI 驱动的视觉走查</p>
@@ -262,24 +262,27 @@
         </div>
       </div>
 
-      <!-- 独立通栏大按钮 -->
-      <div class="form-footer-global animate-in" style="animation-delay: 0.3s">
-        <button
-          class="btn-sparkle-large"
-          :disabled="!canSubmit || isSubmitting"
-          @click="handleSubmit"
-        >
-          <div class="btn-content">
-            <span v-if="!isSubmitting">立即开始视觉对比 (LAUNCH ANALYSIS)</span>
-            <span v-else class="loading-state">
-              <span class="pulse-ring"></span>
-              正在进行智能对比分析...
-            </span>
+      <!-- 独立通栏大按钮 (New Style) -->
+      <footer class="sticky-footer glass animate-in" style="animation-delay: 0.3s">
+        <div class="footer-container">
+          <div class="footer-meta">
+            <p v-if="!canSubmit" class="text-warning">⚠️ 请先完成左侧数据源配置及设计稿上传</p>
+            <p v-else class="text-success">✅ 配置就绪，可以开始对比</p>
           </div>
-          <div class="btn-shimmer"></div>
-        </button>
-        <p v-if="!canSubmit && !isSubmitting" class="submit-hint">请先完成左侧数据源配置及设计稿上传</p>
-      </div>
+          <div class="footer-btns">
+            <!-- <button class="btn-cancel-glass" @click="resetConfig">重置</button> -->
+            <button 
+              type="submit" 
+              class="btn-submit-hero" 
+              @click="handleSubmit"
+              :disabled="!canSubmit || isSubmitting"
+            >
+              <span v-if="isSubmitting" class="loader-mini"></span>
+              {{ isSubmitting ? '正在进行智能对比分析...' : '立即开始视觉对比' }}
+            </button>
+          </div>
+        </div>
+      </footer>
     </div>
   </div>
 </template>
@@ -445,10 +448,10 @@ const handleSubmit = async () => {
 .compare-page {
   padding: 2rem 0;
   min-height: 100vh;
-  background: #f8fafc;
+  /* Removed background: #f8fafc; to show global mesh gradient */
 }
 
-.container-wide {
+.container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px;
@@ -472,29 +475,33 @@ const handleSubmit = async () => {
   font-size: 0.9375rem;
 }
 
-/* 通用卡片分块 */
+/* 通用卡片分块 - 玻璃拟态 */
 .form-section-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 20px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .form-section-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
+  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 /* 分块头部 */
 .section-header-modern {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fafafa;
+  background: linear-gradient(to right, rgba(248, 250, 252, 0.5), rgba(241, 245, 249, 0.5));
 }
 
 .section-title-group {
@@ -504,27 +511,28 @@ const handleSubmit = async () => {
 }
 
 .step-badge {
-  width: 28px;
-  height: 28px;
-  background: #0f172a;
+  width: 32px;
+  height: 32px;
+  background: var(--accent-gradient);
   color: white;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 800;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
 }
 
 .section-title-text {
-  font-size: 1.0625rem;
+  font-size: 1.125rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .section-subtitle-text {
-  font-size: 0.75rem;
-  color: #94a3b8;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 .section-content {
@@ -537,6 +545,7 @@ const handleSubmit = async () => {
   grid-template-columns: 1fr 400px;
   gap: 2rem;
   align-items: start;
+  padding-bottom: 120px;
 }
 
 @media (max-width: 1024px) {
@@ -558,64 +567,88 @@ const handleSubmit = async () => {
 
 /* 间距辅助类 */
 .mt-section { margin-top: 0; } /* 已通过 gap 处理 */
-.mt-md { margin-top: 1.25rem; }
+.mt-md { margin-top: 1.5rem; }
 .mt-xs { margin-top: 0.75rem; }
 .mt-lg { margin-top: 2rem; }
 
-/* 底部全局大按钮 */
-.form-footer-global {
-  margin-top: 3rem;
+/* 底部全局大按钮 - 固定吸底 */
+/* 底部浮动栏 - 与批量任务保持一致 */
+.sticky-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-color);
+  padding: 20px 0;
+  z-index: 1000;
+  box-shadow: 0 -10px 30px rgba(0,0,0,0.05);
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  padding-bottom: 4rem;
 }
 
-.btn-sparkle-large {
-  width: 100%;
-  max-width: 600px;
-  height: 64px;
-  background: #0f172a;
-  color: #fff;
+.footer-meta p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.text-warning { color: #f59e0b; }
+.text-success { color: #10b981; }
+
+.footer-btns {
+  display: flex;
+  gap: 16px;
+}
+
+.btn-submit-hero {
+  background: var(--accent-primary);
+  color: white;
   border: none;
-  border-radius: 18px;
-  font-size: 1.25rem;
-  font-weight: 850;
+  padding: 14px 32px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 15px;
   cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.2);
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 激活状态：蓝色高亮 */
-.btn-sparkle-large:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 20px 40px -8px rgba(37, 99, 235, 0.4);
+.btn-submit-hero:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(14, 165, 233, 0.4);
 }
 
-.btn-sparkle-large:hover:not(:disabled) {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 30px 50px -10px rgba(37, 99, 235, 0.5);
-}
-
-.btn-sparkle-large:disabled {
-  background: #1e293b;
+.btn-submit-hero:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   filter: grayscale(1);
 }
 
-.submit-hint {
-  font-size: 0.8125rem;
-  color: #94a3b8;
-  font-weight: 600;
+.loader-mini {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+  animation: spin 0.8s linear infinite;
 }
 
-.full-width-btn {
-  display: none; /* 废弃旧类 */
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* 激活状态：蓝色高亮 - 已废弃 */
 
 /* 配置卡片内部堆叠 */
 .config-stack {
@@ -627,14 +660,15 @@ const handleSubmit = async () => {
 .engine-cards-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.75rem;
 }
 
 /* 开关项垂直排列 */
 .switches-column-modern {
   display: flex;
   flex-direction: column;
-  background: #f1f5f9;
+  background: rgba(241, 245, 249, 0.5);
+  border: 1px solid var(--border-color);
   padding: 1rem;
   border-radius: 12px;
 }

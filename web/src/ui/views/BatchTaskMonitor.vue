@@ -14,6 +14,9 @@
           <button class="btn-export" @click="handleExport">
             <span class="icon">📥</span> 导出对比报告 (CSV)
           </button>
+          <button class="btn-gallery" @click="goToDetail">
+            <span class="icon">🖼️</span> 查看画廊报告
+          </button>
           <button class="btn-new-task" @click="handleRestart">新任务</button>
         </div>
         <div v-else-if="task?.status === 'running'" class="running-indicator">
@@ -386,6 +389,7 @@ const handleExport = () => window.open(batchTaskAPI.getExportUrl(taskId), '_blan
 const handleRestart = () => router.push('/batch-screenshot')
 const viewReport = (id) => router.push(`/report/${id}`)
 const goBack = () => router.push('/batch-tasks')
+const goToDetail = () => router.push(`/batch-tasks/${taskId}/detail`)
 
 const previewImage = (res) => {
   // 优先使用 screenshot_path (已经是完整 URL)
@@ -669,6 +673,8 @@ onMounted(() => {
 
 .btn-export { background: white; border: 1px solid #e2e8f0; padding: 12px 24px; border-radius: 14px; font-weight: 800; font-size: 14px; cursor: pointer; transition: all 0.2s; }
 .btn-export:hover { border-color: #cbd5e1; background: #f8fafc; }
+.btn-gallery { background: white; color: #7c3aed; border: 1px solid #ddd6fe; padding: 12px 24px; border-radius: 14px; font-weight: 800; font-size: 14px; cursor: pointer; margin-left:12px; transition: all 0.2s; }
+.btn-gallery:hover { background: #f5f3ff; border-color: #c4b5fd; }
 .btn-new-task { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 14px; font-weight: 800; font-size: 14px; cursor: pointer; margin-left:12px; }
 
 /* Glass Modal */

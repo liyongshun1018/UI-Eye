@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ScriptEditor',
         component: () => import('../ui/views/ScriptEditor.vue'),
         meta: { title: 'UI-Eye - 脚本编辑' }
+    },
+    {
+        path: '/intro',
+        name: 'Intro',
+        component: () => import('../ui/views/Intro.vue'),
+        meta: { title: 'UI-Eye - 项目介绍' }
     }
 ]
 

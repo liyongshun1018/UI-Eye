@@ -1,9 +1,31 @@
 <template>
   <div class="history-page">
-    <div class="container-wide">
+    <div class="container">
       <div class="page-header">
-        <h1 class="page-title">对比记录</h1>
-        <p class="page-subtitle">查看和管理所有的 UI 走查报告</p>
+        <div class="header-left">
+          <h1 class="page-title">对比记录</h1>
+          <p class="page-subtitle">查看和管理所有的 UI 走查报告</p>
+        </div>
+        
+        <!-- 视图切换 -->
+        <div class="view-toggles" v-if="reports.length > 0">
+          <button 
+            class="toggle-btn" 
+            :class="{ active: viewMode === 'gallery' }"
+            @click="viewMode = 'gallery'"
+          >
+            <span class="btn-icon">🖼️</span>
+            <span class="btn-label">画廊视图</span>
+          </button>
+          <button 
+            class="toggle-btn" 
+            :class="{ active: viewMode === 'list' }"
+            @click="viewMode = 'list'"
+          >
+            <span class="btn-icon">📄</span>
+            <span class="btn-label">列表视图</span>
+          </button>
+        </div>
       </div>
 
       <div v-if="loading" class="loading-state">
@@ -21,8 +43,8 @@
       />
 
       <div v-else>
-        <!-- 对比记录表格 -->
-        <div class="history-table-container">
+        <!-- 列表视图 -->
+        <div v-if="viewMode === 'list'" class="history-table-container animate-in">
           <table class="history-table">
             <thead>
               <tr>
@@ -94,34 +116,27 @@
           </table>
         </div>
 
-        <!-- 分页组件 -->
-        <div class="pagination" v-if="totalPages > 1">
-          <button 
-            class="btn btn-sm btn-ghost" 
-            :disabled="currentPage === 1"
-            @click="currentPage--"
-          >
-            ← 上一页
-          </button>
-          <div class="page-numbers">
-            <button
-              v-for="page in displayPages"
-              :key="page"
-              class="page-btn"
-              :class="{ active: page === currentPage }"
-              @click="currentPage = page"
-            >
-              {{ page }}
-            </button>
-          </div>
-          <button 
-            class="btn btn-sm btn-ghost" 
-            :disabled="currentPage === totalPages"
-            @click="currentPage++"
-          >
-            下一页 →
-          </button>
+        <!-- 画廊视图 -->
+        <div v-else class="history-gallery-grid animate-in">
+          <HistoryGalleryCard
+            v-for="report in paginatedReports"
+            :key="report.id"
+            :report="report"
+            @click="viewReport(report.id)"
+            @delete="deleteReport(report.id)"
+          />
         </div>
+
+
+        <!-- 分页组件 -->
+        <Pagination
+          v-if="reports.length > 0"
+          :current-page="currentPage"
+          :total="reports.length" 
+          :page-size="pageSize"
+          :show-meta="true"
+          @update:current-page="val => currentPage = val"
+        />
       </div>
     </div>
 
@@ -155,6 +170,8 @@ import { getSimilarityClass as getSimilarityClassUtil } from '@core/utils/simila
 import { formatDate } from '@core/utils'
 import EmptyState from '@ui/components/common/EmptyState.vue'
 import ConfirmDialog from '@ui/components/common/ConfirmDialog.vue'
+import Pagination from '@ui/components/common/Pagination.vue'
+import HistoryGalleryCard from '@ui/components/history/HistoryGalleryCard.vue'
 
 const { showError } = useDialog()
 const { state: confirmState, confirmDelete, handleConfirm, handleCancel } = useConfirm()
@@ -164,6 +181,7 @@ const router = useRouter()
 const reports = ref([])
 /** @type {import('vue').Ref<boolean>} */
 const loading = ref(true)
+const viewMode = ref('list') // list | gallery
 
 // 分页相关状态
 const currentPage = ref(1)
@@ -310,7 +328,52 @@ onMounted(() => {
 
 .page-header {
   margin-bottom: var(--spacing-lg);
-  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.view-toggles {
+  display: flex;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.toggle-btn {
+  padding: 0 16px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.toggle-btn.active {
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.btn-icon {
+  font-size: 1.1rem;
+}
+
+.history-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 /* 表格容器 */
@@ -382,7 +445,8 @@ onMounted(() => {
 }
 
 .col-time {
-  width: 140px;
+  width: 180px;
+  white-space: nowrap;
 }
 
 .col-score {

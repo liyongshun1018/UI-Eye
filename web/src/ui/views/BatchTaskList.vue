@@ -1,5 +1,5 @@
 <template>
-  <div class="batch-task-list container-wide animate-in">
+  <div class="batch-task-list container animate-in">
     <!-- 紧凑型页头 -->
     <div class="page-header">
       <div class="header-left">
@@ -74,8 +74,13 @@
     <!-- 数据核心区 -->
     <div class="data-viewport">
       <div v-if="loading" class="loading-state">
-        <div class="spinner-premium"></div>
-        <p>正在同步云端数据...</p>
+        <div class="brand-loader">
+          <div class="eye-outer">
+            <div class="eye-lid"></div>
+            <div class="pupil"></div>
+          </div>
+          <div class="loader-text">UI-Eye 正在同步...</div>
+        </div>
       </div>
 
       <template v-else-if="tasks.length > 0">
@@ -88,61 +93,37 @@
         />
 
         <!-- 专业分页器 -->
-        <div v-if="totalPages > 1" class="pagination-professional">
-          <div class="pagination-meta">
-            显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, total) }} 条，共 {{ total }} 条
-          </div>
-          <div class="pagination-controls">
-            <button
-              class="p-btn"
-              :disabled="currentPage === 1"
-              @click="goToPage(currentPage - 1)"
-            >
-              PREV
-            </button>
-            <div class="page-numbers">
-              <button 
-                v-for="p in totalPages" 
-                :key="p"
-                class="n-btn"
-                :class="{ active: currentPage === p }"
-                @click="goToPage(p)"
-              >
-                {{ p }}
-              </button>
-            </div>
-            <button
-              class="p-btn"
-              :disabled="currentPage === totalPages"
-              @click="goToPage(currentPage + 1)"
-            >
-              NEXT
-            </button>
-          </div>
-        </div>
+        <Pagination
+          v-if="total > pageSize"
+          :current-page="currentPage"
+          :total="total"
+          :page-size="pageSize"
+          @update:current-page="goToPage"
+        />
       </template>
 
-      <!-- 优雅空状态 -->
-      <div v-else class="empty-placeholder">
-        <div class="empty-art">🍃</div>
-        <h3>数据沙漠</h3>
-        <p>当前筛选条件下未发现任何任务记录</p>
-        <button v-if="currentStatus !== null" class="btn-text" @click="filterByStatus(null)">全部任务</button>
-      </div>
+      <!-- 空状态 -->
+      <EmptyState
+        v-else-if="tasks.length === 0 && !loading"
+        icon="🍃"
+        title="数据沙漠"
+        description="当前筛选条件下未发现任何任务记录"
+        :action-text="currentStatus !== null ? '查看全部任务' : '发起新任务'"
+        @action="currentStatus !== null ? filterByStatus(null) : goToCreate()"
+      />
     </div>
 
-    <!-- 危险操作二次确认 -->
-    <div v-if="showDeleteConfirm" class="modal-backdrop-blur" @click.self="cancelDelete">
-      <div class="delete-modal card glass glass-dark">
-        <div class="modal-icon">⚠️</div>
-        <h3>确认销毁任务？</h3>
-        <p>此操作将永久抹除该批量任务及其关联的所有截图与分析报告，动作不可逆。</p>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="cancelDelete">保留记录</button>
-          <button class="btn-danger-shimmer" @click="confirmDelete">确 认 销 毁</button>
-        </div>
-      </div>
-    </div>
+    <!-- 确认对话框 -->
+    <ConfirmDialog
+      :show="confirmState.show"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-text="confirmState.confirmText"
+      :cancel-text="confirmState.cancelText"
+      :type="confirmState.type"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
 
@@ -155,6 +136,12 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import BatchTaskTable from '@ui/components/batch/BatchTaskTable.vue'
 import { batchTaskAPI } from '@core/api'
+import { useConfirm } from '@modules/composables/useConfirm.ts'
+import EmptyState from '@ui/components/common/EmptyState.vue'
+import ConfirmDialog from '@ui/components/common/ConfirmDialog.vue'
+import Pagination from '@ui/components/common/Pagination.vue'
+
+const { state: confirmState, confirm, handleConfirm, handleCancel } = useConfirm()
 
 const router = useRouter()
 const tasks = ref([])
@@ -166,8 +153,6 @@ const currentPage = ref(1)
 const pageSize = ref(15) // 表格视图下每页 15 条更合适
 const total = ref(0)
 let autoRefreshTimer = null
-const showDeleteConfirm = ref(false)
-const deletingTaskId = ref(null)
 
 /**
  * 状态过滤选项配置
@@ -221,28 +206,30 @@ const handleSearch = () => {
 const viewTask = (taskId) => router.push(`/batch-tasks/${taskId}`)
 const monitorTask = (taskId) => router.push(`/batch-tasks/${taskId}`)
 
-const handleDelete = (taskId) => {
+const handleDelete = async (taskId) => {
   stopAutoRefresh()
-  deletingTaskId.value = taskId
-  showDeleteConfirm.value = true
-}
-
-const confirmDelete = async () => {
-  showDeleteConfirm.value = false
-  const taskId = deletingTaskId.value
-  deletingTaskId.value = null
+  
+  const confirmed = await confirm({
+    title: '确认销毁任务？',
+    message: '此操作将永久抹除该批量任务及其关联的所有截图与分析报告，动作不可逆。',
+    confirmText: '确认销毁',
+    cancelText: '保留记录',
+    type: 'danger'
+  })
+  
+  if (!confirmed) {
+    startAutoRefresh()
+    return
+  }
+  
   try {
     await batchTaskAPI.deleteTask(taskId)
     await Promise.all([loadTasks(), loadStats()])
-  } catch (e) {} finally {
+  } catch (e) {
+    console.error('删除任务失败:', e)
+  } finally {
     startAutoRefresh()
   }
-}
-
-const cancelDelete = () => {
-  showDeleteConfirm.value = false
-  deletingTaskId.value = null
-  startAutoRefresh()
 }
 
 const goToCreate = () => router.push('/batch-screenshot')
@@ -336,65 +323,99 @@ onBeforeUnmount(() => stopAutoRefresh())
 .dashboard-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
+  gap: 24px; /* Wider gap */
+  margin-bottom: 32px;
   padding: 0 var(--spacing-md);
 }
 
 .stat-card-premium {
-  background: white;
-  padding: 20px;
-  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 24px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
+  gap: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); /* Softer initial shadow */
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.4s;
 }
 
 .stat-card-premium:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--accent-primary);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.stat-card-premium:hover::before {
+  opacity: 1;
 }
 
 .stat-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  background: var(--bg-secondary);
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 28px;
+  transition: transform 0.4s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  background: white; /* Default fallback */
 }
 
-.stat-icon-wrapper.running { background: #eff6ff; }
-.stat-icon-wrapper.success { background: #f0fdf4; }
-.stat-icon-wrapper.failed { background: #fef2f2; }
+.stat-card-premium:hover .stat-icon-wrapper {
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* Dynamic Gradients for Icons */
+.stat-icon-wrapper { background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); color: #64748b; }
+.stat-icon-wrapper.running { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #3b82f6; }
+.stat-icon-wrapper.success { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); color: #10b981; }
+.stat-icon-wrapper.failed { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); color: #ef4444; }
 
 .stat-content {
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
 }
 
 .stat-label {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--text-primary);
   font-family: var(--font-mono);
   line-height: 1;
-  margin-top: 4px;
+  letter-spacing: -0.05em;
 }
 
-.text-glow-blue { color: var(--accent-primary); text-shadow: 0 0 10px rgba(14, 165, 233, 0.2); }
+.text-glow-blue { 
+  color: var(--accent-primary); 
+  text-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
 .text-error { color: var(--error); }
 
 /* 控制栏 */
@@ -402,21 +423,35 @@ onBeforeUnmount(() => stopAutoRefresh())
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
-  margin: 0 var(--spacing-md) var(--spacing-md);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  padding: 16px 24px;
+  margin: 0 var(--spacing-md) 32px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s;
+}
+
+.control-bar:hover {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .status-tabs {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  padding: 4px;
+  background: rgba(241, 245, 249, 0.5);
+  border-radius: 12px;
 }
 
 .tab-btn {
-  padding: 6px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-secondary);
   background: transparent;
@@ -426,33 +461,36 @@ onBeforeUnmount(() => stopAutoRefresh())
 }
 
 .tab-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .tab-btn.active {
-  background: var(--accent-primary);
-  color: white;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  background: white;
+  color: var(--accent-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .search-wrapper {
   position: relative;
-  width: 260px;
+  width: 320px;
 }
 
 .search-input {
   width: 100%;
-  padding: 8px 36px 8px 12px;
-  background: rgba(241, 245, 249, 0.5);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 12px 44px 12px 16px;
+  background: white;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 0.9rem;
   outline: none;
+  transition: all 0.3s;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .search-input:focus {
   border-color: var(--accent-primary);
-  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .search-hint {

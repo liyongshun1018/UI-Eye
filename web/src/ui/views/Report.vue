@@ -1,6 +1,6 @@
 <template>
   <div class="report-page">
-    <div class="container-wide">
+    <div class="container">
       <!-- 加载状态 -->
       <div v-if="isLoading" class="loading-state">
         <div class="spinner spin">⚙️</div>
@@ -178,13 +178,24 @@ const openPreview = (fix) => {
 .report-page {
   min-height: 100vh;
   padding: var(--spacing-lg) 0;
-  background: #f8fafc;
+  /* Removed background: #f8fafc; to show global gradient */
 }
 
-.container-wide {
-  max-width: 1400px;
+.container {
+  max-width: 1200px; /* Restored to 1200px for consistency */
   margin: 0 auto;
   padding: 0 var(--spacing-lg);
+}
+
+.report-content {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  padding: 24px;
+  margin-top: 20px;
 }
 
 /* 状态展示 */
@@ -213,7 +224,7 @@ const openPreview = (fix) => {
 }
 
 @media (max-width: 768px) {
-  .container-wide {
+  .container {
     padding: 0 var(--spacing-md);
   }
 }

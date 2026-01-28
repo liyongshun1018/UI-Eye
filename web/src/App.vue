@@ -1,21 +1,50 @@
 <template>
   <div id="app" class="app-container">
-    <!-- 导航栏 -->
+    <!-- 大观通栏导航栏 -->
     <nav class="navbar">
       <div class="navbar-container">
+        <!-- Logo 区域 -->
         <router-link to="/" class="navbar-brand">
-          <span class="brand-icon">👁️</span>
+          <div class="logo-circle">
+            <svg class="logo-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <linearGradient id="logo-gradient" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#3b82f6" />
+                <stop offset="100%" stop-color="#8b5cf6" />
+              </linearGradient>
+              <path 
+                d="M20 8C12 8 5 14 2 20C5 26 12 32 20 32C28 32 35 26 38 20C35 14 28 8 20 8ZM20 28C15.58 28 12 24.42 12 20C12 15.58 15.58 12 20 12C24.42 12 28 15.58 28 20C28 24.42 24.42 28 20 28ZM20 16C17.79 16 16 17.79 16 20C16 22.21 17.79 24 20 24C22.21 24 24 22.21 24 20C24 17.79 22.21 16 20 16Z" 
+                fill="url(#logo-gradient)"
+              />
+            </svg>
+          </div>
           <span class="brand-text">UI-Eye</span>
+          <span class="brand-version">Pro</span>
         </router-link>
         
-        <div class="navbar-menu">
-          <div class="nav-links">
-            <router-link to="/" class="nav-item">🏠 首页</router-link>
-            <router-link to="/compare" class="nav-item">🚀 开始对比</router-link>
-            <router-link to="/batch-tasks" class="nav-item">📦 批量任务</router-link>
-            <RouterLink to="/scripts" class="nav-item">📜 交互脚本</RouterLink>
-            <RouterLink to="/history" class="nav-item">📊 对比历史</RouterLink>
-          </div>
+        <!-- 导航菜单 -->
+        <div class="nav-links">
+          <router-link to="/" class="nav-item">
+            <span class="nav-text">平台首页</span>
+          </router-link>
+          <router-link to="/compare" class="nav-item">
+            <span class="nav-text">单次审计</span>
+          </router-link>
+          <router-link to="/batch-tasks" class="nav-item">
+            <span class="nav-text">批量巡检</span>
+          </router-link>
+          <RouterLink to="/scripts" class="nav-item">
+            <span class="nav-text">交互脚本</span>
+          </RouterLink>
+          <RouterLink to="/history" class="nav-item">
+            <span class="nav-text">历史报告</span>
+          </RouterLink>
+        </div>
+
+        <!-- 功能行动区 -->
+        <div class="navbar-actions">
+          <router-link to="/compare" class="btn-primary-sm">
+            开始审计
+          </router-link>
         </div>
       </div>
     </nav>
@@ -48,92 +77,122 @@ import DialogContainer from './ui/components/common/DialogContainer.vue'
   flex-direction: column;
 }
 
-/* 导航栏 - 添加渐变背景 */
+/* 导航栏 - Grand Full Width Style */
 .navbar {
   position: sticky;
   top: 0;
-  z-index: 100;
-  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  height: 64px;
 }
 
 .navbar-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 var(--spacing-md);
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  padding: 0 40px;
 }
 
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 12px;
   text-decoration: none;
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: white;
-  transition: all var(--transition-base);
+  transition: opacity 0.2s;
 }
 
-.navbar-brand:hover {
-  transform: scale(1.05);
-  opacity: 0.9;
-}
-
-.brand-icon {
-  font-size: 1.5rem;
+.logo-circle {
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.15));
 }
 
 .brand-text {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
-.navbar-menu {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-lg);
+.brand-version {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
 }
 
 .nav-links {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-lg);
+  height: 100%;
+  gap: 8px;
 }
 
 .nav-item {
   position: relative;
+  display: flex;
+  align-items: center;
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  transition: all var(--transition-base);
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 550;
+  padding: 0 16px;
+  height: 100%;
+  transition: all 0.2s;
+}
+
+.nav-item::after {
+  content: '';
+  position: absolute;
+  bottom: 0px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--accent-primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(-50%);
 }
 
 .nav-item:hover {
-  color: white;
-  transform: translateY(-1px);
+  color: #0f172a;
 }
 
 .nav-item.router-link-active {
-  color: white;
-  font-weight: var(--font-weight-semibold);
+  color: var(--accent-primary);
 }
 
 .nav-item.router-link-active::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: white;
-  border-radius: var(--radius-full);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  width: 100%;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+}
+
+.btn-primary-sm {
+  text-decoration: none;
+  background: #0f172a;
+  color: white;
+  font-size: 0.825rem;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.btn-primary-sm:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* 主内容区域 */
@@ -142,26 +201,9 @@ import DialogContainer from './ui/components/common/DialogContainer.vue'
 }
 
 /* 响应式 */
-@media (max-width: 768px) {
-  .navbar-container {
-    padding: 0 var(--spacing-sm);
-  }
-
-  .navbar-menu {
-    gap: var(--spacing-md);
-  }
-
-  .nav-links {
-    gap: var(--spacing-sm);
-  }
-
-  .nav-item {
-    font-size: var(--font-size-sm);
-    padding: var(--spacing-xs);
-  }
-
-  .brand-text {
-    display: none;
-  }
+@media (max-width: 1024px) {
+  .navbar-container { padding: 0 20px; }
+  .brand-version, .nav-item .nav-text { display: none; }
+  .nav-item { padding: 0 10px; }
 }
 </style>
